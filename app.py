@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 st.title("📈 Stock Target Monitor & Execution Dashboard")
-st.markdown("Upload your asset watchlist Excel file or edit targets directly in the table below. Market prices refresh once per day.")
+st.markdown("Upload an Excel file once to seed your database, then manage assets dynamically via the grid and sidebar panels.")
 
 # --- SESSION STATE INITIALIZATION ---
 if 'raw_portfolio' not in st.session_state:
@@ -50,40 +50,53 @@ with st.sidebar:
     st.header("⚙️ Settings & System")
     st.caption("To delete a stock: Select the checkbox next to the ticker in the main grid and press 'Delete' on your keyboard, or use the trash icon.")
     
+    # Reset/Clear Option
+    if st.button("🗑️ Clear Entire Portfolio Database"):
+        st.session_state.raw_portfolio = None
+        st.cache_data.clear()
+        st.rerun()
+        
     if st.button("🔄 Force Refresh Market Data"):
         st.cache_data.clear()
         st.rerun()
 
-# --- FILE UPLOADER WIDGET ---
-uploaded_file = st.file_uploader("Drag and drop your asset watchlist Excel file here to initialize data", type=["xlsx"])
+# --- ONE-TIME EXCEL INITIALIZATION SEED ---
+if st.session_state.raw_portfolio is None:
+    # Only show the uploader if the current memory database is completely empty
+    uploaded_file = st.file_uploader("Drag and drop your asset watchlist Excel file here to initialize data", type=["xlsx"], key="excel_uploader")
 
-if uploaded_file is not None:
-    try:
-        raw_df = pd.read_excel(uploaded_file)
-        raw_df.columns = [str(col).strip().title() for col in raw_df.columns]
-        
-        required_cols = ['Ticker', 'Buy Price', 'Sell Price', 'Last Updated']
-        if not all(col in raw_df.columns for col in required_cols):
-            st.error(f"Mapping Error: Spreadsheet must contain these exact columns: {required_cols}")
-        else:
-            initial_data = []
-            for _, row in raw_df.iterrows():
-                dt = row['Last Updated']
-                formatted_date = dt.strftime("%Y/%m/%d") if pd.notna(dt) and hasattr(dt, 'strftime') else str(dt).strip() if pd.notna(dt) else ""
-                initial_data.append({
-                    "Ticker": str(row['Ticker']).strip().upper(),
-                    "Buy Price": float(row['Buy Price']),
-                    "Sell Price": float(row['Sell Price']),
-                    "Last Updated": formatted_date
-                })
-            st.session_state.raw_portfolio = pd.DataFrame(initial_data)
-    except Exception as e:
-        st.error(f"Error parsing uploaded file: {e}")
+    if uploaded_file is not None:
+        try:
+            raw_df = pd.read_excel(uploaded_file)
+            raw_df.columns = [str(col).strip().title() for col in raw_df.columns]
+            
+            required_cols = ['Ticker', 'Buy Price', 'Sell Price', 'Last Updated']
+            if not all(col in raw_df.columns for col in required_cols):
+                st.error(f"Mapping Error: Spreadsheet must contain these exact columns: {required_cols}")
+            else:
+                initial_data = []
+                for _, row in raw_df.iterrows():
+                    dt = row['Last Updated']
+                    formatted_date = dt.strftime("%Y/%m/%d") if pd.notna(dt) and hasattr(dt, 'strftime') else str(dt).strip() if pd.notna(dt) else ""
+                    initial_data.append({
+                        "Ticker": str(row['Ticker']).strip().upper(),
+                        "Buy Price": float(row['Buy Price']),
+                        "Sell Price": float(row['Sell Price']),
+                        "Last Updated": formatted_date
+                    })
+                # Commit strictly to internal app memory
+                st.session_state.raw_portfolio = pd.DataFrame(initial_data)
+                st.success("Watchlist database successfully initialized from Excel!")
+                st.rerun() # Instantly re-render to lock memory and auto-hide this uploader widget
+        except Exception as e:
+            st.error(f"Error parsing uploaded file: {e}")
 
 # --- HIGH-PERFORMANCE DAILY CACHED ENGINE ---
 @st.cache_data(ttl=86400)
 def fetch_daily_market_snapshots(tickers_tuple):
     market_snapshots = {}
+    if not tickers_tuple:
+        return market_snapshots
     for ticker in tickers_tuple:
         try:
             stock = yf.Ticker(ticker)
@@ -213,4 +226,4 @@ if st.session_state.raw_portfolio is not None:
         st.session_state.raw_portfolio = current_raw
         st.rerun()
 else:
-    st.info("💡 App is live. Awaiting file execution. Upload an Excel workbook containing 'Ticker', 'Buy Price', 'Sell Price', and 'Last Updated' columns to begin.")
+    st.info("💡 App database is currently empty. Drag and drop your asset watchlist Excel file above to initialize data.")
