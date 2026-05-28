@@ -26,7 +26,6 @@ with st.sidebar:
         new_ticker = st.text_input("Ticker Symbol (e.g., AAPL)").strip().upper()
         new_buy = st.number_input("Buy Target Price ($)", min_value=0.0, step=0.01, format="%.2f")
         new_sell = st.number_input("Sell Profit Price ($)", min_value=0.0, step=0.01, format="%.2f")
-        # UPDATED: Prompt user explicitly for the standardized date structure
         new_updated = st.text_input("Last Updated (yyyy/mm/dd)", placeholder="2026/05/28")
         submit_button = st.form_submit_button("Add to Watchlist")
         
@@ -75,22 +74,17 @@ if uploaded_file is not None:
         else:
             initial_data = []
             for _, row in raw_df.iterrows():
-                # --- UPDATED: DATE PARSING LOGIC ---
-                # Safely capture Excel dates, strip out time metadata, and format using yyyy/mm/dd
                 raw_date_val = row['Last Updated']
                 formatted_date_str = ""
                 
                 if pd.notna(raw_date_val):
                     try:
-                        # If Excel parsed it automatically into a datetime object, convert it directly
                         if hasattr(raw_date_val, 'strftime'):
                             formatted_date_str = raw_date_val.strftime("%Y/%m/%d")
                         else:
-                            # Try running a broad conversion function, dropping any hanging time stamps
                             parsed_date = pd.to_datetime(raw_date_val)
                             formatted_date_str = parsed_date.strftime("%Y/%m/%d")
                     except Exception:
-                        # Fallback case: if it's string text like a note or note entry, keep it raw
                         formatted_date_str = str(raw_date_val).strip()
                 
                 initial_data.append({
@@ -116,9 +110,14 @@ def fetch_daily_market_snapshots(tickers_tuple):
                 current_price = round(hist['Close'].iloc[-1], 2)
                 historical_closes = [round(x, 2) for x in hist['Close'].iloc[::-1].tolist()]
                 
+                # Capture closing price from 5 trading days ago (1 week) for drop calculation
+                # If history is short, fallback to the oldest available price
+                price_1w_ago = round(hist['Close'].iloc[-6], 2) if len(hist) >= 6 else round(hist['Close'].iloc[0], 2)
+                
                 market_snapshots[ticker] = {
                     "current_price": current_price,
-                    "historical_closes": historical_closes
+                    "historical_closes": historical_closes,
+                    "price_1w_ago": price_1w_ago
                 }
         except Exception:
             pass
@@ -132,6 +131,7 @@ if st.session_state.raw_portfolio is not None:
     daily_data = fetch_daily_market_snapshots(active_tickers)
     
     processed_data = []
+    top_drops_data = []
     buy_alerts = 0
     sell_alerts = 0
     
@@ -144,6 +144,10 @@ if st.session_state.raw_portfolio is not None:
         if ticker in daily_data:
             current_price = daily_data[ticker]["current_price"]
             closes_backward = daily_data[ticker]["historical_closes"]
+            price_1w_ago = daily_data[ticker]["price_1w_ago"]
+            
+            # Calculate weekly performance percentage
+            weekly_perf = ((current_price - price_1w_ago) / price_1w_ago) * 100
             
             days_below = 0
             if current_price <= buy_target:
@@ -164,6 +168,14 @@ if st.session_state.raw_portfolio is not None:
             else:
                 status = "Hold / Monitor"
                 days_display = None
+                
+            # Stash the analytics for our top drops filter
+            top_drops_data.append({
+                "Ticker": ticker,
+                "Buy Price": buy_target,
+                "Current Market": current_price,
+                "Weekly Change %": weekly_perf
+            })
         else:
             current_price = 0.0
             status = "Data Offline"
@@ -181,6 +193,15 @@ if st.session_state.raw_portfolio is not None:
         
     df_results = pd.DataFrame(processed_data)
     
+    # --- GENERATE TOP DROPS DATAFRAME ---
+    if top_drops_data:
+        df_all_drops = pd.DataFrame(top_drops_data)
+        # Filter for stocks that actually went down, then sort biggest negative numbers to the top
+        df_negative_drops = df_all_drops[df_all_drops['Weekly Change %'] < 0]
+        df_top_5_drops = df_negative_drops.sort_values(by="Weekly Change %", ascending=True).head(5)
+    else:
+        df_top_5_drops = pd.DataFrame(columns=["Ticker", "Buy Price", "Current Market", "Weekly Change %"])
+
     # Render Dashboard Metric Cards
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -191,6 +212,30 @@ if st.session_state.raw_portfolio is not None:
         st.metric(label="Profit Horizons Reached", value=sell_alerts)
     st.write("---")
     
+    # --- NEW SPLIT DISPLAY PANEL ---
+    # Split layout: 40% left for Top Drops, 60% right left open for scaling layout
+    layout_left, layout_right = st.columns([2, 3])
+    
+    with layout_left:
+        st.subheader("📉 Top Weekly Declines (Max 5)")
+        if not df_top_5_drops.empty:
+            styled_drops = df_top_5_drops.style.format({
+                "Buy Price": "${:,.2f}",
+                "Current Market": "${:,.2f}",
+                "Weekly Change %": "{:+.2f}%"
+            })
+            # Display as a clean, static overview table
+            st.dataframe(styled_drops, use_container_width=True, hide_index=True)
+        else:
+            st.info("No stocks in the portfolio have experienced a price decline over the past week.")
+            
+    with layout_right:
+        # Keeping this space clean and open for symmetry or alternative chart components
+        st.caption("Side panel open for comparative allocations or secondary metrics.")
+
+    st.write("---")
+    
+    # --- MAIN WATCHLIST GRID ---
     def highlight_status(row):
         css_styles = [''] * len(row)
         if row['Status'] == "Buy":
@@ -203,7 +248,6 @@ if st.session_state.raw_portfolio is not None:
         "Sell Price": "${:,.2f}"
     }).apply(highlight_status, axis=1)
     
-    # Render Unified Editable Grid
     st.subheader("📊 Live Watchlist Execution Grid")
     response_editor = st.data_editor(
         styled_df,
@@ -214,7 +258,6 @@ if st.session_state.raw_portfolio is not None:
             "Sell Price": st.column_config.NumberColumn("Sell Price (Double-Click to Edit)", min_value=0.0, format="$%.2f"),
             "Status": st.column_config.TextColumn("Status", disabled=True),
             "Days Below Buy Target": st.column_config.NumberColumn("Days Below Buy Target", disabled=True, format="%d days"),
-            # UPDATED: Kept as an open text input so you can change or re-type dates quickly inside cells
             "Last Updated": st.column_config.TextColumn("Last Updated (Double-Click to Edit)", disabled=False)
         },
         use_container_width=True,
@@ -245,4 +288,4 @@ if st.session_state.raw_portfolio is not None:
         st.rerun()
 
 else:
-    st.info("💡 App is live. Awaiting file execution. Upload an Excel workbook containing 'Ticker', 'Buy Price', 'Sell Price', and 'Last' columns to begin.")
+    st.info("💡 App is live. Awaiting file execution. Upload an Excel workbook containing 'Ticker', 'Buy Price', 'Sell Price', and 'Last Updated' columns to begin.")
