@@ -110,8 +110,6 @@ def fetch_daily_market_snapshots(tickers_tuple):
                 current_price = round(hist['Close'].iloc[-1], 2)
                 historical_closes = [round(x, 2) for x in hist['Close'].iloc[::-1].tolist()]
                 
-                # Capture closing price from 5 trading days ago (1 week) for drop calculation
-                # If history is short, fallback to the oldest available price
                 price_1w_ago = round(hist['Close'].iloc[-6], 2) if len(hist) >= 6 else round(hist['Close'].iloc[0], 2)
                 
                 market_snapshots[ticker] = {
@@ -146,7 +144,6 @@ if st.session_state.raw_portfolio is not None:
             closes_backward = daily_data[ticker]["historical_closes"]
             price_1w_ago = daily_data[ticker]["price_1w_ago"]
             
-            # Calculate weekly performance percentage
             weekly_perf = ((current_price - price_1w_ago) / price_1w_ago) * 100
             
             days_below = 0
@@ -169,12 +166,13 @@ if st.session_state.raw_portfolio is not None:
                 status = "Hold / Monitor"
                 days_display = None
                 
-            # Stash the analytics for our top drops filter
+            # Stash analytics and include the manually provided 'Last Updated' value
             top_drops_data.append({
                 "Ticker": ticker,
                 "Buy Price": buy_target,
                 "Current Market": current_price,
-                "Weekly Change %": weekly_perf
+                "Weekly Change %": weekly_perf,
+                "Last Updated": last_updated
             })
         else:
             current_price = 0.0
@@ -196,11 +194,11 @@ if st.session_state.raw_portfolio is not None:
     # --- GENERATE TOP DROPS DATAFRAME ---
     if top_drops_data:
         df_all_drops = pd.DataFrame(top_drops_data)
-        # Filter for stocks that actually went down, then sort biggest negative numbers to the top
         df_negative_drops = df_all_drops[df_all_drops['Weekly Change %'] < 0]
+        # Sort to put the deepest declines at the top
         df_top_5_drops = df_negative_drops.sort_values(by="Weekly Change %", ascending=True).head(5)
     else:
-        df_top_5_drops = pd.DataFrame(columns=["Ticker", "Buy Price", "Current Market", "Weekly Change %"])
+        df_top_5_drops = pd.DataFrame(columns=["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"])
 
     # Render Dashboard Metric Cards
     col1, col2, col3 = st.columns(3)
@@ -212,25 +210,23 @@ if st.session_state.raw_portfolio is not None:
         st.metric(label="Profit Horizons Reached", value=sell_alerts)
     st.write("---")
     
-    # --- NEW SPLIT DISPLAY PANEL ---
-    # Split layout: 40% left for Top Drops, 60% right left open for scaling layout
+    # --- SPLIT DISPLAY PANEL ---
     layout_left, layout_right = st.columns([2, 3])
     
     with layout_left:
-        st.subheader("📉 Top Weekly Declines")
+        st.subheader("📉 Top Weekly Declines (Max 5)")
         if not df_top_5_drops.empty:
             styled_drops = df_top_5_drops.style.format({
                 "Buy Price": "${:,.2f}",
                 "Current Market": "${:,.2f}",
                 "Weekly Change %": "{:+.2f}%"
             })
-            # Display as a clean, static overview table
+            # Displays your structural timeline tracking alongside pricing performance metrics
             st.dataframe(styled_drops, use_container_width=True, hide_index=True)
         else:
             st.info("No stocks in the portfolio have experienced a price decline over the past week.")
             
     with layout_right:
-        # Keeping this space clean and open for symmetry or alternative chart components
         st.caption("Side panel open for comparative allocations or secondary metrics.")
 
     st.write("---")
@@ -277,15 +273,3 @@ if st.session_state.raw_portfolio is not None:
         if (edited_buy != current_raw.at[idx, 'Buy Price']) or \
            (edited_sell != current_raw.at[idx, 'Sell Price']) or \
            (str(edited_updated) != str(current_raw.at[idx, 'Last Updated'])):
-            
-            current_raw.at[idx, 'Buy Price'] = edited_buy
-            current_raw.at[idx, 'Sell Price'] = edited_sell
-            current_raw.at[idx, 'Last Updated'] = str(edited_updated).strip()
-            has_changed = True
-            
-    if has_changed:
-        st.session_state.raw_portfolio = current_raw
-        st.rerun()
-
-else:
-    st.info("💡 App is live. Awaiting file execution. Upload an Excel workbook containing 'Ticker', 'Buy Price', 'Sell Price', and 'Last Updated' columns to begin.")
