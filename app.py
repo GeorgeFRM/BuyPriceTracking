@@ -217,7 +217,7 @@ if st.session_state.raw_portfolio is not None:
     layout_left, layout_right = st.columns([2, 3])
     
     with layout_left:
-        st.subheader("📉 Top Weekly Declines (Max 5)")
+        st.subheader("📉 Top Weekly Declines")
         if not df_top_5_drops.empty:
             styled_drops = df_top_5_drops.style.format({
                 "Buy Price": "${:,.2f}",
