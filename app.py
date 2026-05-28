@@ -50,7 +50,6 @@ with st.sidebar:
     st.header("⚙️ Settings & System")
     st.caption("To delete a stock: Select the checkbox next to the ticker in the main grid and press 'Delete' on your keyboard, or use the trash icon.")
     
-    # Reset/Clear Option
     if st.button("🗑️ Clear Entire Portfolio Database"):
         st.session_state.raw_portfolio = None
         st.cache_data.clear()
@@ -62,7 +61,6 @@ with st.sidebar:
 
 # --- ONE-TIME EXCEL INITIALIZATION SEED ---
 if st.session_state.raw_portfolio is None:
-    # Only show the uploader if the current memory database is completely empty
     uploaded_file = st.file_uploader("Drag and drop your asset watchlist Excel file here to initialize data", type=["xlsx"], key="excel_uploader")
 
     if uploaded_file is not None:
@@ -84,10 +82,9 @@ if st.session_state.raw_portfolio is None:
                         "Sell Price": float(row['Sell Price']),
                         "Last Updated": formatted_date
                     })
-                # Commit strictly to internal app memory
                 st.session_state.raw_portfolio = pd.DataFrame(initial_data)
                 st.success("Watchlist database successfully initialized from Excel!")
-                st.rerun() # Instantly re-render to lock memory and auto-hide this uploader widget
+                st.rerun()
         except Exception as e:
             st.error(f"Error parsing uploaded file: {e}")
 
@@ -102,128 +99,9 @@ def fetch_daily_market_snapshots(tickers_tuple):
             stock = yf.Ticker(ticker)
             hist = stock.history(period="6mo")
             if not hist.empty:
+                current_price = round(hist['Close'].iloc[-1], 2)
+                price_90d_ago = round(hist['Close'].iloc[-64], 2) if len(hist) >= 64 else round(hist['Close'].iloc[0], 2)
+                
                 market_snapshots[ticker] = {
-                    "current_price": round(hist['Close'].iloc[-1], 2),
-                    "historical_closes": [round(x, 2) for x in hist['Close'].iloc[::-1].tolist()],
-                    "price_1w_ago": round(hist['Close'].iloc[-6], 2) if len(hist) >= 6 else round(hist['Close'].iloc[0], 2)
-                }
-        except Exception:
-            pass
-    return market_snapshots
-
-# --- APPLICATION LOGIC ---
-if st.session_state.raw_portfolio is not None:
-    active_tickers = tuple(st.session_state.raw_portfolio['Ticker'].unique())
-    daily_data = fetch_daily_market_snapshots(active_tickers)
-    
-    processed_data, top_drops_data = [], []
-    buy_alerts, sell_alerts = 0, 0
-    
-    for _, row in st.session_state.raw_portfolio.iterrows():
-        ticker, buy_target, sell_target, last_updated = row['Ticker'], row['Buy Price'], row['Sell Price'], row['Last Updated']
-        
-        if ticker in daily_data:
-            current_price = daily_data[ticker]["current_price"]
-            closes_backward = daily_data[ticker]["historical_closes"]
-            weekly_perf = ((current_price - daily_data[ticker]["price_1w_ago"]) / daily_data[ticker]["price_1w_ago"]) * 100
-            
-            days_below = 0
-            if current_price <= buy_target:
-                status = "Buy"
-                buy_alerts += 1
-                for p in closes_backward:
-                    if p <= buy_target: days_below += 1
-                    else: break
-                days_display = int(days_below)
-            elif current_price >= sell_target:
-                status, days_display = "Profit Zone", None
-                sell_alerts += 1
-            else:
-                status, days_display = "Hold / Monitor", None
-                
-            top_drops_data.append({
-                "Ticker": ticker, "Buy Price": buy_target, "Current Market": current_price, 
-                "Weekly Change %": weekly_perf, "Last Updated": last_updated
-            })
-        else:
-            current_price, status, days_display = 0.0, "Data Offline", None
-            
-        processed_data.append({
-            "Ticker": ticker, "Buy Price": buy_target, "Current Market": current_price,
-            "Sell Price": sell_target, "Status": status, "Days Below Buy Target": days_display, "Last Updated": last_updated
-        })
-        
-    df_results = pd.DataFrame(processed_data)
-    
-    # Generate Top Drops Data
-    if top_drops_data:
-        df_all_drops = pd.DataFrame(top_drops_data)
-        df_top_10_drops = df_all_drops[df_all_drops['Weekly Change %'] <= -10.0].sort_values(by="Weekly Change %").head(10)
-    else:
-        df_top_10_drops = pd.DataFrame(columns=["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"])
-
-    # KPI Metrics
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Assets Tracked", len(df_results))
-    col2.metric("Buy Targets Triggered", buy_alerts)
-    col3.metric("Profit Horizons Reached", sell_alerts)
-    st.write("---")
-    
-    # Split Panel Display
-    layout_left, layout_right = st.columns([2, 3])
-    with layout_left:
-        st.subheader("📉 Top Weekly Declines")
-        if not df_top_10_drops.empty:
-            st.dataframe(df_top_10_drops.style.format({
-                "Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "Weekly Change %": "{:+.2f}%"
-            }), use_container_width=True, hide_index=True)
-        else:
-            st.info("No tracking assets have declined by more than 10% over the trailing week.")
-            
-    with layout_right:
-        st.markdown("### 📊 Focus Window")
-        st.caption("This interactive panel is ready for additional tracking metrics or portfolio breakdown visualizations.")
-
-    st.write("---")
-    
-    # Main Watchlist Grid Layout Configuration
-    styled_df = df_results.style.format({"Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "Sell Price": "${:,.2f}"}).apply(
-        lambda r: ['background-color: rgba(46, 204, 113, 0.18); color: #2ecc71; font-weight: bold;'] * len(r) if r['Status'] == "Buy" else [''] * len(r), axis=1
-    )
-    
-    st.subheader("📊 Live Watchlist Execution Grid")
-    response_editor = st.data_editor(
-        styled_df,
-        column_config={
-            "Ticker": st.column_config.TextColumn("Ticker", disabled=True), 
-            "Buy Price": st.column_config.NumberColumn("Buy Price (Double-Click to Edit)", min_value=0.0, format="$%.2f"),
-            "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f"),
-            "Sell Price": st.column_config.NumberColumn("Sell Price (Double-Click to Edit)", min_value=0.0, format="$%.2f"),
-            "Status": st.column_config.TextColumn("Status", disabled=True),
-            "Days Below Buy Target": st.column_config.NumberColumn("Days Below Buy Target", disabled=True, format="%d days"),
-            "Last Updated": st.column_config.TextColumn("Last Updated (Double-Click to Edit)")
-        },
-        use_container_width=True, hide_index=False, num_rows="dynamic", key="unified_portfolio_editor"
-    )
-    
-    # Grid Synchronizer Logic
-    current_raw = st.session_state.raw_portfolio.copy()
-    grid_state = st.session_state.unified_portfolio_editor
-    has_changed = False
-    
-    if grid_state.get("deleted_rows"):
-        current_raw = current_raw.drop(grid_state["deleted_rows"]).reset_index(drop=True)
-        has_changed = True
-    elif grid_state.get("edited_rows"):
-        for str_idx, changes in grid_state["edited_rows"].items():
-            idx = int(str_idx)
-            if idx < len(current_raw):
-                for col, val in changes.items():
-                    current_raw.at[idx, col] = float(val) if "Price" in col else str(val).strip()
-                has_changed = True
-                
-    if has_changed:
-        st.session_state.raw_portfolio = current_raw
-        st.rerun()
-else:
-    st.info("💡 App database is currently empty. Drag and drop your asset watchlist Excel file above to initialize data.")
+                    "current_price": current_price,
+                    "historical
