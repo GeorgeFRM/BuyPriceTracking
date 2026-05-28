@@ -9,28 +9,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom structural CSS inject for cleaner metric blocks and tab alignments
-st.markdown("""
-    <style>
-    [data-testid="stMetric"] {
-        background-color: rgba(28, 131, 225, 0.05);
-        padding: 10px 20px;
-        border-radius: 8px;
-        border: 1px solid rgba(28, 131, 225, 0.1);
-    }
-    div.stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
-    div.stTabs [data-baseweb="tab"] {
-        background-color: rgba(0,0,0,0.03);
-        border-radius: 4px 4px 0px 0px;
-        padding: 6px 16px;
-    }
-    </style>
-""", unsafe_html=True)
-
 st.title("📈 Stock Target Monitor & Execution Dashboard")
-st.markdown("Dynamic execution platform. Manage assets via the unified grid, sidebar utilities, or initial Excel seeding.")
+st.markdown("Upload an Excel file once to seed your database, then manage assets dynamically via the grid and sidebar panels.")
 
 # --- SESSION STATE INITIALIZATION ---
 if 'raw_portfolio' not in st.session_state:
@@ -53,8 +33,10 @@ with st.sidebar:
                 st.error("Please enter a valid ticker symbol and prices greater than $0.00.")
             else:
                 new_row = pd.DataFrame([{
-                    "Ticker": new_ticker, "Buy Price": float(new_buy),
-                    "Sell Price": float(new_sell), "Last Updated": str(new_updated).strip()
+                    "Ticker": new_ticker,
+                    "Buy Price": float(new_buy),
+                    "Sell Price": float(new_sell),
+                    "Last Updated": str(new_updated).strip()
                 }])
                 if st.session_state.raw_portfolio is not None:
                     st.session_state.raw_portfolio = st.session_state.raw_portfolio[st.session_state.raw_portfolio['Ticker'] != new_ticker]
@@ -68,12 +50,12 @@ with st.sidebar:
     st.header("⚙️ Settings & System")
     st.caption("To delete a stock: Select the checkbox next to the ticker in the main grid and press 'Delete' on your keyboard, or use the trash icon.")
     
-    if st.button("🗑️ Clear Entire Portfolio Database", use_container_width=True):
+    if st.button("🗑️ Clear Entire Portfolio Database"):
         st.session_state.raw_portfolio = None
         st.cache_data.clear()
         st.rerun()
         
-    if st.button("🔄 Force Refresh Market Data", use_container_width=True):
+    if st.button("🔄 Force Refresh Market Data"):
         st.cache_data.clear()
         st.rerun()
 
@@ -106,7 +88,7 @@ if st.session_state.raw_portfolio is None:
         except Exception as e:
             st.error(f"Error parsing uploaded file: {e}")
 
-# --- ORIGINAL WORKING CACHED ENGINE (2-YEAR LOOKBACK) ---
+# --- HIGH-PERFORMANCE DAILY CACHED ENGINE ---
 @st.cache_data(ttl=86400)
 def fetch_daily_market_snapshots(tickers_tuple):
     market_snapshots = {}
@@ -115,6 +97,7 @@ def fetch_daily_market_snapshots(tickers_tuple):
     for ticker in tickers_tuple:
         try:
             stock = yf.Ticker(ticker)
+            # FIXED: Expanded lookup range from '1y' to '2y' for deep structural lookbacks
             hist = stock.history(period="2y")
             if not hist.empty:
                 current_price = round(hist['Close'].iloc[-1], 2)
@@ -180,7 +163,7 @@ if st.session_state.raw_portfolio is not None:
         
     df_results = pd.DataFrame(processed_data)
     
-    # Sort execution grid automatically based on days below target (descending)
+    # Sort execution grid based on days below target (highest consecutive count descending)
     if not df_results.empty:
         df_results = df_results.iloc[
             df_results['Days Below Buy Target'].fillna(-1).sort_values(ascending=False).index
@@ -200,60 +183,52 @@ if st.session_state.raw_portfolio is not None:
     else:
         df_top_90d_drops = pd.DataFrame(columns=["Ticker", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"])
 
-    # KPI Layout Ribbon Panel
+    # KPI Metrics
     col1, col2, col3 = st.columns(3)
     col1.metric("Total Assets Tracked", len(df_results))
     col2.metric("Buy Targets Triggered", buy_alerts)
     col3.metric("Profit Horizons Reached", sell_alerts)
     st.write("---")
     
-    # --- TABULAR FOCUS CONSOLE ---
-    st.subheader("📉 Structural Market Drawdown Anomalies")
-    tab1, tab2 = st.tabs(["⚠️ Declines of 25% or More (Trailing 90 Days)", "⏱️ Top Weekly Declines (Worse than -10%)"])
+    # --- SPLIT PANEL DISPLAY ---
+    layout_left, layout_right = st.columns([1, 1])
     
-    with tab1:
-        if not df_top_90d_drops.empty:
-            st.dataframe(df_top_90d_drops.style.format({
-                "Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "90-Day Decline": "{:+.2f}%"
-            }), use_container_width=True, hide_index=True, height=280)
-        else:
-            st.info("No tracking assets have declined by 25% or more over the trailing 90 days.")
-            
-    with tab2:
+    with layout_left:
+        st.subheader("📉 Top Weekly Declines")
         if not df_top_10_drops.empty:
             st.dataframe(df_top_10_drops.style.format({
                 "Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "Weekly Change %": "{:+.2f}%"
-            }), use_container_width=True, hide_index=True, height=280)
+            }), use_container_width=True, hide_index=True)
         else:
             st.info("No tracking assets have declined by more than 10% over the trailing week.")
+            
+    with layout_right:
+        st.subheader("📉 Declines of 25% or More")
+        if not df_top_90d_drops.empty:
+            st.dataframe(df_top_90d_drops.style.format({
+                "Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "90-Day Decline": "{:+.2f}%"
+            }), use_container_width=True, hide_index=True)
+        else:
+            st.info("No tracking assets have declined by 25% or more over the trailing 90 days.")
 
     st.write("---")
     
-    # --- MAIN WATCHLIST GRID WITH EXTENDED CONDITIONAL COLOR MATRIX ---
-    def style_matrix_rows(row):
-        if row['Status'] == "Buy":
-            return ['background-color: rgba(46, 204, 113, 0.14); color: #2ecc71; font-weight: bold;'] * len(row)
-        elif row['Status'] == "Profit Zone":
-            return ['background-color: rgba(41, 128, 185, 0.12); color: #3498db; font-weight: bold;'] * len(row)
-        elif row['Status'] == "Data Offline":
-            return ['color: #7f8c8d; font-style: italic;'] * len(row)
-        return [''] * len(row)
-
+    # Main Watchlist Grid Layout Configuration
     styled_df = df_results.style.format({"Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "Sell Price": "${:,.2f}"}).apply(
-        style_matrix_rows, axis=1
+        lambda r: ['background-color: rgba(46, 204, 113, 0.18); color: #2ecc71; font-weight: bold;'] * len(r) if r['Status'] == "Buy" else [''] * len(r), axis=1
     )
     
     st.subheader("📊 Live Watchlist Execution Grid")
     response_editor = st.data_editor(
         styled_df,
         column_config={
-            "Ticker": st.column_config.TextColumn("Ticker", disabled=True, width="medium"), 
-            "Buy Price": st.column_config.NumberColumn("Buy Price (Edit)", min_value=0.0, format="$%.2f", width="medium"),
-            "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f", width="medium"),
-            "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f", width="medium"),
-            "Status": st.column_config.TextColumn("Status", disabled=True, width="medium"),
-            "Days Below Buy Target": st.column_config.NumberColumn("Streak", disabled=True, format="%d days", width="small"),
-            "Last Updated": st.column_config.TextColumn("Last Updated")
+            "Ticker": st.column_config.TextColumn("Ticker", disabled=True), 
+            "Buy Price": st.column_config.NumberColumn("Buy Price (Double-Click to Edit)", min_value=0.0, format="$%.2f"),
+            "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f"),
+            "Sell Price": st.column_config.NumberColumn("Sell Price (Double-Click to Edit)", min_value=0.0, format="$%.2f"),
+            "Status": st.column_config.TextColumn("Status", disabled=True),
+            "Days Below Buy Target": st.column_config.NumberColumn("Days Below Buy Target", disabled=True, format="%d days"),
+            "Last Updated": st.column_config.TextColumn("Last Updated (Double-Click to Edit)")
         },
         use_container_width=True, hide_index=False, num_rows="dynamic", key="unified_portfolio_editor"
     )
@@ -275,10 +250,4 @@ if st.session_state.raw_portfolio is not None:
                 target_ticker = df_results.at[idx, 'Ticker']
                 master_idx = st.session_state.raw_portfolio[st.session_state.raw_portfolio['Ticker'] == target_ticker].index[0]
                 for col, val in changes.items():
-                    st.session_state.raw_portfolio.at[master_idx, col] = float(val) if "Price" in col else str(val).strip()
-                has_changed = True
-                
-    if has_changed:
-        st.rerun()
-else:
-    st.info("💡 App database is currently empty. Drag and drop your asset watchlist Excel file above to initialize data.")
+                    st.session_state.raw_portfolio.at[master_idx, col]
