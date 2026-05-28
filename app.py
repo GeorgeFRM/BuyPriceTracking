@@ -97,7 +97,8 @@ def fetch_daily_market_snapshots(tickers_tuple):
     for ticker in tickers_tuple:
         try:
             stock = yf.Ticker(ticker)
-            hist = stock.history(period="6mo")
+            # FIXED: Expanded lookup range from '6mo' to '1y' for deep historical tracking
+            hist = stock.history(period="1y")
             if not hist.empty:
                 current_price = round(hist['Close'].iloc[-1], 2)
                 price_90d_ago = round(hist['Close'].iloc[-64], 2) if len(hist) >= 64 else round(hist['Close'].iloc[0], 2)
@@ -162,9 +163,8 @@ if st.session_state.raw_portfolio is not None:
         
     df_results = pd.DataFrame(processed_data)
     
-    # FIXED: Sort execution grid based on days below target (highest consecutive count descending)
+    # Sort execution grid based on days below target (highest consecutive count descending)
     if not df_results.empty:
-        # Use key to sort None values as -1 so they are pushed smoothly to the bottom
         df_results = df_results.iloc[
             df_results['Days Below Buy Target'].fillna(-1).sort_values(ascending=False).index
         ].reset_index(drop=True)
@@ -234,12 +234,10 @@ if st.session_state.raw_portfolio is not None:
     )
     
     # Grid Synchronizer Logic
-    # FIXED: Map editor index changes cleanly against sorted df keys rather than stale memory states
     grid_state = st.session_state.unified_portfolio_editor
     has_changed = False
     
     if grid_state.get("deleted_rows"):
-        # Match the exact row index showing on screen to determine which Ticker string to wipe from session memory
         deleted_tickers = df_results.iloc[grid_state["deleted_rows"]]['Ticker'].tolist()
         st.session_state.raw_portfolio = st.session_state.raw_portfolio[
             ~st.session_state.raw_portfolio['Ticker'].isin(deleted_tickers)
@@ -250,7 +248,6 @@ if st.session_state.raw_portfolio is not None:
             idx = int(str_idx)
             if idx < len(df_results):
                 target_ticker = df_results.at[idx, 'Ticker']
-                # Locate exact original cell coordinates inside master state container via unique ticker lookup
                 master_idx = st.session_state.raw_portfolio[st.session_state.raw_portfolio['Ticker'] == target_ticker].index[0]
                 for col, val in changes.items():
                     st.session_state.raw_portfolio.at[master_idx, col] = float(val) if "Price" in col else str(val).strip()
