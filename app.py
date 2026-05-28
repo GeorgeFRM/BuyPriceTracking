@@ -159,7 +159,7 @@ if st.session_state.raw_portfolio is not None:
                 buy_alerts += 1
                 days_display = int(days_below) 
             elif current_price >= sell_target:
-                status = "Profit Zone"
+                status = "Sell"
                 sell_alerts += 1
                 days_display = None 
             else:
