@@ -54,7 +54,7 @@ with st.sidebar:
 
     st.write("---")
     st.header("⚙️ Settings & System")
-    st.caption("Double-click any cell in 'Buy Price', 'Sell Price', or 'Last Updated' to make inline adjustments.")
+    st.caption("To delete a stock: Select the checkbox next to the ticker in the main grid and press 'Delete' on your keyboard, or use the trash icon.")
     
     if st.button("🔄 Force Refresh Market Data"):
         st.cache_data.clear()
@@ -243,10 +243,12 @@ if st.session_state.raw_portfolio is not None:
     }).apply(highlight_status, axis=1)
     
     st.subheader("📊 Live Watchlist Execution Grid")
+    
+    # FIXED: Added num_rows="dynamic" to allow users to select rows and delete them directly
     response_editor = st.data_editor(
         styled_df,
         column_config={
-            "Ticker": st.column_config.TextColumn("Ticker", disabled=True),
+            "Ticker": st.column_config.TextColumn("Ticker", disabled=False), # Enabled so structural rows match raw inputs on additions/deletions
             "Buy Price": st.column_config.NumberColumn("Buy Price (Double-Click to Edit)", min_value=0.0, format="$%.2f"),
             "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f"),
             "Sell Price": st.column_config.NumberColumn("Sell Price (Double-Click to Edit)", min_value=0.0, format="$%.2f"),
@@ -256,27 +258,41 @@ if st.session_state.raw_portfolio is not None:
         },
         use_container_width=True,
         hide_index=True,
+        num_rows="dynamic",
         key="unified_portfolio_editor"
     )
     
-    # Capture grid edits made to manual parameters
+    # --- PROCESS SYNCHRONIZED EDITS AND DELETIONS ---
+    # Compare raw dashboard states against screen manipulations
     current_raw = st.session_state.raw_portfolio.copy()
     has_changed = False
     
-    for idx in range(len(response_editor)):
-        edited_buy = response_editor.iloc[idx]['Buy Price']
-        edited_sell = response_editor.iloc[idx]['Sell Price']
-        edited_updated = response_editor.iloc[idx]['Last Updated']
-        
-        if (edited_buy != current_raw.at[idx, 'Buy Price']) or \
-           (edited_sell != current_raw.at[idx, 'Sell Price']) or \
-           (str(edited_updated) != str(current_raw.at[idx, 'Last Updated'])):
+    # Check if a row was deleted entirely via grid actions
+    if len(response_editor) < len(current_raw):
+        # Find which tickers remain on the screen grid
+        remaining_tickers = response_editor['Ticker'].dropna().unique()
+        # Filter the backend session state to keep only those remaining tickers
+        current_raw = current_raw[current_raw['Ticker'].isin(remaining_tickers)].reset_index(drop=True)
+        has_changed = True
+    else:
+        # Loop through existing entries to check for inline edits
+        for idx in range(len(response_editor)):
+            if idx >= len(current_raw):
+                break
+                
+            edited_buy = response_editor.iloc[idx]['Buy Price']
+            edited_sell = response_editor.iloc[idx]['Sell Price']
+            edited_updated = response_editor.iloc[idx]['Last Updated']
             
-            current_raw.at[idx, 'Buy Price'] = edited_buy
-            current_raw.at[idx, 'Sell Price'] = edited_sell
-            current_raw.at[idx, 'Last Updated'] = str(edited_updated).strip()
-            has_changed = True
-            
+            if (edited_buy != current_raw.at[idx, 'Buy Price']) or \
+               (edited_sell != current_raw.at[idx, 'Sell Price']) or \
+               (str(edited_updated) != str(current_raw.at[idx, 'Last Updated'])):
+                
+                current_raw.at[idx, 'Buy Price'] = edited_buy
+                current_raw.at[idx, 'Sell Price'] = edited_sell
+                current_raw.at[idx, 'Last Updated'] = str(edited_updated).strip()
+                has_changed = True
+                
     if has_changed:
         st.session_state.raw_portfolio = current_raw
         st.rerun()
