@@ -162,6 +162,13 @@ if st.session_state.raw_portfolio is not None:
         
     df_results = pd.DataFrame(processed_data)
     
+    # FIXED: Sort execution grid based on days below target (highest consecutive count descending)
+    if not df_results.empty:
+        # Use key to sort None values as -1 so they are pushed smoothly to the bottom
+        df_results = df_results.iloc[
+            df_results['Days Below Buy Target'].fillna(-1).sort_values(ascending=False).index
+        ].reset_index(drop=True)
+        
     # Generate Top Weekly Drops Data (Worse than -10%, max 10)
     if top_drops_data:
         df_all_drops = pd.DataFrame(top_drops_data)
@@ -169,7 +176,7 @@ if st.session_state.raw_portfolio is not None:
     else:
         df_top_10_drops = pd.DataFrame(columns=["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"])
 
-    # FIXED: Expanded the slice window limit to return up to 25 records cleanly
+    # Generate 90-Day Macro Drops Data (Worse than -25%, max 25)
     if macro_drops_data:
         df_all_macro = pd.DataFrame(macro_drops_data)
         df_top_90d_drops = df_all_macro[df_all_macro['90-Day Decline'] <= -25.0].sort_values(by="90-Day Decline").head(25)
@@ -227,23 +234,29 @@ if st.session_state.raw_portfolio is not None:
     )
     
     # Grid Synchronizer Logic
-    current_raw = st.session_state.raw_portfolio.copy()
+    # FIXED: Map editor index changes cleanly against sorted df keys rather than stale memory states
     grid_state = st.session_state.unified_portfolio_editor
     has_changed = False
     
     if grid_state.get("deleted_rows"):
-        current_raw = current_raw.drop(grid_state["deleted_rows"]).reset_index(drop=True)
+        # Match the exact row index showing on screen to determine which Ticker string to wipe from session memory
+        deleted_tickers = df_results.iloc[grid_state["deleted_rows"]]['Ticker'].tolist()
+        st.session_state.raw_portfolio = st.session_state.raw_portfolio[
+            ~st.session_state.raw_portfolio['Ticker'].isin(deleted_tickers)
+        ].reset_index(drop=True)
         has_changed = True
     elif grid_state.get("edited_rows"):
         for str_idx, changes in grid_state["edited_rows"].items():
             idx = int(str_idx)
-            if idx < len(current_raw):
+            if idx < len(df_results):
+                target_ticker = df_results.at[idx, 'Ticker']
+                # Locate exact original cell coordinates inside master state container via unique ticker lookup
+                master_idx = st.session_state.raw_portfolio[st.session_state.raw_portfolio['Ticker'] == target_ticker].index[0]
                 for col, val in changes.items():
-                    current_raw.at[idx, col] = float(val) if "Price" in col else str(val).strip()
+                    st.session_state.raw_portfolio.at[master_idx, col] = float(val) if "Price" in col else str(val).strip()
                 has_changed = True
                 
     if has_changed:
-        st.session_state.raw_portfolio = current_raw
         st.rerun()
 else:
     st.info("💡 App database is currently empty. Drag and drop your asset watchlist Excel file above to initialize data.")
