@@ -26,7 +26,8 @@ with st.sidebar:
         new_ticker = st.text_input("Ticker Symbol (e.g., AAPL)").strip().upper()
         new_buy = st.number_input("Buy Target Price ($)", min_value=0.0, step=0.01, format="%.2f")
         new_sell = st.number_input("Sell Profit Price ($)", min_value=0.0, step=0.01, format="%.2f")
-        new_updated = st.text_input("Last Updated Note/Date (e.g., 2026-05-28)")
+        # UPDATED: Prompt user explicitly for the standardized date structure
+        new_updated = st.text_input("Last Updated (yyyy/mm/dd)", placeholder="2026/05/28")
         submit_button = st.form_submit_button("Add to Watchlist")
         
         if submit_button:
@@ -74,11 +75,29 @@ if uploaded_file is not None:
         else:
             initial_data = []
             for _, row in raw_df.iterrows():
+                # --- UPDATED: DATE PARSING LOGIC ---
+                # Safely capture Excel dates, strip out time metadata, and format using yyyy/mm/dd
+                raw_date_val = row['Last Updated']
+                formatted_date_str = ""
+                
+                if pd.notna(raw_date_val):
+                    try:
+                        # If Excel parsed it automatically into a datetime object, convert it directly
+                        if hasattr(raw_date_val, 'strftime'):
+                            formatted_date_str = raw_date_val.strftime("%Y/%m/%d")
+                        else:
+                            # Try running a broad conversion function, dropping any hanging time stamps
+                            parsed_date = pd.to_datetime(raw_date_val)
+                            formatted_date_str = parsed_date.strftime("%Y/%m/%d")
+                    except Exception:
+                        # Fallback case: if it's string text like a note or note entry, keep it raw
+                        formatted_date_str = str(raw_date_val).strip()
+                
                 initial_data.append({
                     "Ticker": str(row['Ticker']).strip().upper(),
                     "Buy Price": float(row['Buy Price']),
                     "Sell Price": float(row['Sell Price']),
-                    "Last Updated": str(row['Last Updated']).strip() if pd.notna(row['Last Updated']) else ""
+                    "Last Updated": formatted_date_str
                 })
             st.session_state.raw_portfolio = pd.DataFrame(initial_data)
     except Exception as e:
@@ -137,12 +156,11 @@ if st.session_state.raw_portfolio is not None:
             if current_price <= buy_target:
                 status = "Buy"
                 buy_alerts += 1
-                # FIXED: Keep this as a raw number/integer so the data table sorts it correctly
                 days_display = int(days_below) 
             elif current_price >= sell_target:
                 status = "Profit Zone"
                 sell_alerts += 1
-                days_display = None # Use None instead of a blank string for numbers
+                days_display = None 
             else:
                 status = "Hold / Monitor"
                 days_display = None
@@ -195,8 +213,8 @@ if st.session_state.raw_portfolio is not None:
             "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f"),
             "Sell Price": st.column_config.NumberColumn("Sell Price (Double-Click to Edit)", min_value=0.0, format="$%.2f"),
             "Status": st.column_config.TextColumn("Status", disabled=True),
-            # FIXED: Configured as a NumberColumn with a custom display format string ending in " days"
             "Days Below Buy Target": st.column_config.NumberColumn("Days Below Buy Target", disabled=True, format="%d days"),
+            # UPDATED: Kept as an open text input so you can change or re-type dates quickly inside cells
             "Last Updated": st.column_config.TextColumn("Last Updated (Double-Click to Edit)", disabled=False)
         },
         use_container_width=True,
@@ -227,4 +245,4 @@ if st.session_state.raw_portfolio is not None:
         st.rerun()
 
 else:
-    st.info("💡 App is live. Awaiting file execution. Upload an Excel workbook containing 'Ticker', 'Buy Price', 'Sell Price', and 'Last Updated' columns to begin.")
+    st.info("💡 App is live. Awaiting file execution. Upload an Excel workbook containing 'Ticker', 'Buy Price', 'Sell Price', and 'Last
