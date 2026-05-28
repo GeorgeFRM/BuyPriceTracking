@@ -97,8 +97,8 @@ def fetch_daily_market_snapshots(tickers_tuple):
     for ticker in tickers_tuple:
         try:
             stock = yf.Ticker(ticker)
-            # FIXED: Expanded lookup range from '6mo' to '1y' for deep historical tracking
-            hist = stock.history(period="1y")
+            # FIXED: Expanded lookup range from '1y' to '2y' for deep structural lookbacks
+            hist = stock.history(period="2y")
             if not hist.empty:
                 current_price = round(hist['Close'].iloc[-1], 2)
                 price_90d_ago = round(hist['Close'].iloc[-64], 2) if len(hist) >= 64 else round(hist['Close'].iloc[0], 2)
@@ -250,10 +250,4 @@ if st.session_state.raw_portfolio is not None:
                 target_ticker = df_results.at[idx, 'Ticker']
                 master_idx = st.session_state.raw_portfolio[st.session_state.raw_portfolio['Ticker'] == target_ticker].index[0]
                 for col, val in changes.items():
-                    st.session_state.raw_portfolio.at[master_idx, col] = float(val) if "Price" in col else str(val).strip()
-                has_changed = True
-                
-    if has_changed:
-        st.rerun()
-else:
-    st.info("💡 App database is currently empty. Drag and drop your asset watchlist Excel file above to initialize data.")
+                    st.session_state.raw_portfolio.at[master_idx, col]
