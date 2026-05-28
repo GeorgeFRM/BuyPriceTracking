@@ -236,4 +236,50 @@ if st.session_state.raw_portfolio is not None:
             css_styles = ['background-color: rgba(46, 204, 113, 0.18); color: #2ecc71; font-weight: bold;'] * len(row)
         return css_styles
 
-    styled
+    styled_df = df_results.style.format({
+        "Buy Price": "${:,.2f}",
+        "Current Market": "${:,.2f}",
+        "Sell Price": "${:,.2f}"
+    }).apply(highlight_status, axis=1)
+    
+    st.subheader("📊 Live Watchlist Execution Grid")
+    response_editor = st.data_editor(
+        styled_df,
+        column_config={
+            "Ticker": st.column_config.TextColumn("Ticker", disabled=True),
+            "Buy Price": st.column_config.NumberColumn("Buy Price (Double-Click to Edit)", min_value=0.0, format="$%.2f"),
+            "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f"),
+            "Sell Price": st.column_config.NumberColumn("Sell Price (Double-Click to Edit)", min_value=0.0, format="$%.2f"),
+            "Status": st.column_config.TextColumn("Status", disabled=True),
+            "Days Below Buy Target": st.column_config.NumberColumn("Days Below Buy Target", disabled=True, format="%d days"),
+            "Last Updated": st.column_config.TextColumn("Last Updated (Double-Click to Edit)", disabled=False)
+        },
+        use_container_width=True,
+        hide_index=True,
+        key="unified_portfolio_editor"
+    )
+    
+    # Capture grid edits made to manual parameters
+    current_raw = st.session_state.raw_portfolio.copy()
+    has_changed = False
+    
+    for idx in range(len(response_editor)):
+        edited_buy = response_editor.iloc[idx]['Buy Price']
+        edited_sell = response_editor.iloc[idx]['Sell Price']
+        edited_updated = response_editor.iloc[idx]['Last Updated']
+        
+        if (edited_buy != current_raw.at[idx, 'Buy Price']) or \
+           (edited_sell != current_raw.at[idx, 'Sell Price']) or \
+           (str(edited_updated) != str(current_raw.at[idx, 'Last Updated'])):
+            
+            current_raw.at[idx, 'Buy Price'] = edited_buy
+            current_raw.at[idx, 'Sell Price'] = edited_sell
+            current_raw.at[idx, 'Last Updated'] = str(edited_updated).strip()
+            has_changed = True
+            
+    if has_changed:
+        st.session_state.raw_portfolio = current_raw
+        st.rerun()
+
+else:
+    st.info("💡 App is live. Awaiting file execution. Upload an Excel workbook containing 'Ticker', 'Buy Price', 'Sell Price', and 'Last Updated' columns to begin.")
