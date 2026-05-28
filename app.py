@@ -66,7 +66,7 @@ with st.sidebar:
                     st.session_state.raw_portfolio = pd.concat([st.session_state.raw_portfolio, new_row], ignore_index=True)
                 else:
                     st.session_state.raw_portfolio = new_row
-                st.session_state.cache_timestamp = None  # Invalidate market cache to fetch new asset data immediately
+                st.session_state.cache_timestamp = None  # Invalidate market cache
                 st.success(f"Added {new_ticker} successfully!")
                 st.rerun()
 
@@ -113,38 +113,48 @@ if st.session_state.raw_portfolio is None:
         except Exception as e:
             st.error(f"Error parsing uploaded file: {e}")
 
-# --- SPEED OPTIMIZATION: BATCH MARKET FETCH DATA ENGINE ---
+# --- RE-ENGINEERED BATCH MARKET FETCH ENGINE ---
 def fetch_portfolio_market_data(tickers):
     if not tickers:
         return {}
         
     now = datetime.datetime.now()
-    # If cache exists and is less than 4 hours old, execute instant retrieval
-    if st.session_state.cache_timestamp and (now - st.session_state.cache_timestamp).total_seconds() < 14400:
-        return st.session_state.market_cache
+    # Check if the cache timestamp is under 8 hours old
+    if st.session_state.cache_timestamp and (now - st.session_state.cache_timestamp).total_seconds() < 28800:
+        if st.session_state.market_cache:
+            return st.session_state.market_cache
 
     snapshots = {}
     try:
-        # High Speed Modification: Download all ticker data strings simultaneously in 1 block request
+        # Fetch data in one fast batch request
         data = yf.download(list(tickers), period="2y", group_by='ticker', progress=False)
         
         for ticker in tickers:
-            if ticker in data.columns.levels[0] if isinstance(data.columns, pd.MultiIndex) else [ticker]:
-                hist = data[ticker] if isinstance(data.columns, pd.MultiIndex) else data
-                hist = hist.dropna(subset=['Close'])
+            try:
+                # Handle both MultiIndex columns (multiple tickers) and SingleIndex columns (single ticker) safely
+                if isinstance(data.columns, pd.MultiIndex):
+                    if ticker in data.columns.levels[0]:
+                        hist = data[ticker].dropna(subset=['Close'])
+                    else:
+                        continue
+                else:
+                    hist = data.dropna(subset=['Close'])
                 
                 if not hist.empty:
-                    current_price = round(hist['Close'].iloc[-1], 2)
-                    price_90d_ago = round(hist['Close'].iloc[-64], 2) if len(hist) >= 64 else round(hist['Close'].iloc[0], 2)
+                    current_price = round(float(hist['Close'].iloc[-1]), 2)
+                    price_90d_ago = round(float(hist['Close'].iloc[-64]), 2) if len(hist) >= 64 else round(float(hist['Close'].iloc[0]), 2)
+                    price_1w_ago = round(float(hist['Close'].iloc[-6]), 2) if len(hist) >= 6 else round(float(hist['Close'].iloc[0]), 2)
                     
                     snapshots[ticker] = {
                         "current_price": current_price,
-                        "historical_closes": [round(x, 2) for x in hist['Close'].iloc[::-1].tolist()],
-                        "price_1w_ago": round(hist['Close'].iloc[-6], 2) if len(hist) >= 6 else round(hist['Close'].iloc[0], 2),
+                        "historical_closes": [round(float(x), 2) for x in hist['Close'].iloc[::-1].tolist()],
+                        "price_1w_ago": price_1w_ago,
                         "price_90d_ago": price_90d_ago
                     }
-    except Exception:
-        pass
+            except Exception:
+                pass # Skip faulty or delisted tickers gracefully
+    except Exception as e:
+        st.error(f"Market Connection Error: {e}")
         
     st.session_state.market_cache = snapshots
     st.session_state.cache_timestamp = now
@@ -159,9 +169,12 @@ if st.session_state.raw_portfolio is not None:
     buy_alerts, sell_alerts = 0, 0
     
     for _, row in st.session_state.raw_portfolio.iterrows():
-        ticker, buy_target, sell_target, last_updated = row['Ticker'], row['Buy Price'], row['Sell Price'], row['Last Updated']
+        ticker = row['Ticker']
+        buy_target = row['Buy Price']
+        sell_target = row['Sell Price']
+        last_updated = row['Last Updated']
         
-        if ticker in daily_data:
+        if ticker in daily_data and daily_data[ticker]:
             current_price = daily_data[ticker]["current_price"]
             closes_backward = daily_data[ticker]["historical_closes"]
             weekly_perf = ((current_price - daily_data[ticker]["price_1w_ago"]) / daily_data[ticker]["price_1w_ago"]) * 100
@@ -205,7 +218,7 @@ if st.session_state.raw_portfolio is not None:
             df_results['Days Below Buy Target'].fillna(-1).sort_values(ascending=False).index
         ].reset_index(drop=True)
         
-    # Isolate drop vectors
+    # Isolate drop vectors safely
     if top_drops_data:
         df_all_drops = pd.DataFrame(top_drops_data)
         df_top_10_drops = df_all_drops[df_all_drops['Weekly Change %'] <= -10.0].sort_values(by="Weekly Change %").head(10)
@@ -225,7 +238,7 @@ if st.session_state.raw_portfolio is not None:
     col3.metric("Profit Horizons Reached", sell_alerts)
     st.write("---")
     
-    # --- GRAPHIC IMPROVEMENT: TABULAR FOCUS CONSOLE ---
+    # --- TABULAR FOCUS CONSOLE ---
     st.subheader("📉 Structural Market Drawdown Anomalies")
     tab1, tab2 = st.tabs(["⚠️ Declines of 25% or More (Trailing 90 Days)", "⏱️ Top Weekly Declines (Worse than -10%)"])
     
@@ -247,7 +260,7 @@ if st.session_state.raw_portfolio is not None:
 
     st.write("---")
     
-    # --- MAIN WATCHLIST GRID: RE-ENGINEERED WITH COMPREHENSIVE STATUS HIGHLIGHTS ---
+    # --- MAIN WATCHLIST GRID ---
     def style_matrix_rows(row):
         if row['Status'] == "Buy":
             return ['background-color: rgba(46, 204, 113, 0.14); color: #2ecc71; font-weight: bold;'] * len(row)
