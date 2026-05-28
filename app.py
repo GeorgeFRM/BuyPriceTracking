@@ -271,5 +271,5 @@ if st.session_state.raw_portfolio is not None:
         edited_updated = response_editor.iloc[idx]['Last Updated']
         
         if (edited_buy != current_raw.at[idx, 'Buy Price']) or \
-           (edited_sell != current_raw.at[idx, 'Sell Price']) or \
-           (str(edited_updated) != str(current_raw.at[idx, 'Last Updated'])):
+            (edited_sell != current_raw.at[idx, 'Sell Price']) or \
+            (str(edited_updated) != str(current_raw.at[idx, 'Last Updated'])):
