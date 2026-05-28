@@ -97,7 +97,7 @@ if st.session_state.raw_portfolio is None:
         except Exception as e:
             st.error(f"Error parsing uploaded file: {e}")
 
-# --- NEW OPTIMIZED ENGINE: HIGH-SPEED SAFE BATCH DOWNLOADER ---
+# --- HIGH-SPEED SAFE BATCH DOWNLOADER ---
 @st.cache_data(ttl=86400)
 def fetch_daily_market_snapshots(tickers_tuple):
     market_snapshots = {}
@@ -105,22 +105,18 @@ def fetch_daily_market_snapshots(tickers_tuple):
         return market_snapshots
         
     try:
-        # One request handles all tickers simultaneously
         data = yf.download(list(tickers_tuple), period="2y", group_by='ticker', progress=False)
         
         for ticker in tickers_tuple:
             try:
-                # 1. Safely isolate single ticker dataframe from yfinance MultiIndex output
                 if isinstance(data.columns, pd.MultiIndex):
                     if ticker in data.columns.levels[0]:
                         hist = data[ticker].dropna(subset=['Close'])
                     else:
                         continue
                 else:
-                    # Fallback for solitary ticker inputs where yfinance returns a flat index
                     hist = data.dropna(subset=['Close'])
                 
-                # 2. Extract metrics safely if data exists
                 if not hist.empty:
                     current_price = round(float(hist['Close'].iloc[-1]), 2)
                     price_90d_ago = round(float(hist['Close'].iloc[-64]), 2) if len(hist) >= 64 else round(float(hist['Close'].iloc[0]), 2)
@@ -133,7 +129,7 @@ def fetch_daily_market_snapshots(tickers_tuple):
                         "price_90d_ago": price_90d_ago
                     }
             except Exception:
-                pass # Gracefully skip broken tickers
+                pass 
     except Exception as e:
         st.error(f"Failed to fetch market batch update: {e}")
         
@@ -143,7 +139,7 @@ def fetch_daily_market_snapshots(tickers_tuple):
 if st.session_state.raw_portfolio is not None:
     active_tickers = tuple(st.session_state.raw_portfolio['Ticker'].unique())
     
-    # Check Level-2 Memory Caching layer before running download engine
+    # Check Level-2 Memory Caching layer (8 hours / 28,800 seconds)
     now = datetime.datetime.now()
     if (st.session_state.cache_timestamp and 
         (now - st.session_state.cache_timestamp).total_seconds() < 28800 and 
@@ -163,8 +159,13 @@ if st.session_state.raw_portfolio is not None:
         if ticker in daily_data and daily_data[ticker]:
             current_price = daily_data[ticker]["current_price"]
             closes_backward = daily_data[ticker]["historical_closes"]
-            weekly_perf = ((current_price - daily_data[ticker]["price_1w_ago"]) / daily_data[ticker]["price_1w_ago"]) * 100
-            macro_perf = ((current_price - daily_data[ticker]["price_90d_ago"]) / daily_data[ticker]["price_90d_ago"]) * 100
+            
+            # FIXED: Safe division guards against zero or invalid historical baseline prices
+            p_1w = daily_data[ticker]["price_1w_ago"]
+            p_90d = daily_data[ticker]["price_90d_ago"]
+            
+            weekly_perf = ((current_price - p_1w) / p_1w) * 100 if p_1w > 0 else 0.0
+            macro_perf = ((current_price - p_90d) / p_90d) * 100 if p_90d > 0 else 0.0
             
             days_below = 0
             if current_price <= buy_target:
@@ -248,7 +249,7 @@ if st.session_state.raw_portfolio is not None:
 
     st.write("---")
     
-    # --- MAIN WATCHLIST GRID WITH EXTENDED CONDITIONAL COLOR MATRIX ---
+    # --- MAIN WATCHLIST GRID WITH CONDITIONAL COLOR MATRIX ---
     def style_matrix_rows(row):
         if row['Status'] == "Buy":
             return ['background-color: rgba(46, 204, 113, 0.14); color: #2ecc71; font-weight: bold;'] * len(row)
