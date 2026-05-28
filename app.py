@@ -35,7 +35,6 @@ with st.sidebar:
             elif new_buy <= 0 or new_sell <= 0:
                 st.error("Prices must be greater than $0.00.")
             else:
-                # Create the new row structure with user-defined update string
                 new_row = pd.DataFrame([{
                     "Ticker": new_ticker,
                     "Buy Price": float(new_buy),
@@ -43,14 +42,11 @@ with st.sidebar:
                     "Last Updated": str(new_updated).strip()
                 }])
                 
-                # Append to existing table or initialize a brand new one
                 if st.session_state.raw_portfolio is None:
                     st.session_state.raw_portfolio = new_row
                 else:
-                    # Check if the ticker already exists to prevent duplicate rows
                     if new_ticker in st.session_state.raw_portfolio['Ticker'].values:
                         st.session_state.raw_portfolio = st.session_state.raw_portfolio[st.session_state.raw_portfolio['Ticker'] != new_ticker]
-                    
                     st.session_state.raw_portfolio = pd.concat([st.session_state.raw_portfolio, new_row], ignore_index=True)
                 
                 st.success(f"Added {new_ticker} successfully!")
@@ -60,7 +56,6 @@ with st.sidebar:
     st.header("⚙️ Settings & System")
     st.caption("Double-click any cell in 'Buy Price', 'Sell Price', or 'Last Updated' to make inline adjustments.")
     
-    # Manual Cache Override Button
     if st.button("🔄 Force Refresh Market Data"):
         st.cache_data.clear()
         st.rerun()
@@ -73,7 +68,6 @@ if uploaded_file is not None:
         raw_df = pd.read_excel(uploaded_file)
         raw_df.columns = [str(col).strip().title() for col in raw_df.columns]
         
-        # Updated requirement to ensure 'Last Updated' is parsed from your spreadsheet
         required_cols = ['Ticker', 'Buy Price', 'Sell Price', 'Last Updated']
         if not all(col in raw_df.columns for col in required_cols):
             st.error(f"Mapping Error: Spreadsheet must contain these exact columns: {required_cols}")
@@ -143,18 +137,19 @@ if st.session_state.raw_portfolio is not None:
             if current_price <= buy_target:
                 status = "Buy"
                 buy_alerts += 1
-                days_display = f"{days_below} days" if days_below > 1 else "1 day"
+                # FIXED: Keep this as a raw number/integer so the data table sorts it correctly
+                days_display = int(days_below) 
             elif current_price >= sell_target:
                 status = "Profit Zone"
                 sell_alerts += 1
-                days_display = ""
+                days_display = None # Use None instead of a blank string for numbers
             else:
                 status = "Hold / Monitor"
-                days_display = ""
+                days_display = None
         else:
             current_price = 0.0
             status = "Data Offline"
-            days_display = ""
+            days_display = None
             
         processed_data.append({
             "Ticker": ticker,
@@ -200,7 +195,8 @@ if st.session_state.raw_portfolio is not None:
             "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f"),
             "Sell Price": st.column_config.NumberColumn("Sell Price (Double-Click to Edit)", min_value=0.0, format="$%.2f"),
             "Status": st.column_config.TextColumn("Status", disabled=True),
-            "Days Below Buy Target": st.column_config.TextColumn("Days Below Buy Target", disabled=True),
+            # FIXED: Configured as a NumberColumn with a custom display format string ending in " days"
+            "Days Below Buy Target": st.column_config.NumberColumn("Days Below Buy Target", disabled=True, format="%d days"),
             "Last Updated": st.column_config.TextColumn("Last Updated (Double-Click to Edit)", disabled=False)
         },
         use_container_width=True,
@@ -217,7 +213,6 @@ if st.session_state.raw_portfolio is not None:
         edited_sell = response_editor.iloc[idx]['Sell Price']
         edited_updated = response_editor.iloc[idx]['Last Updated']
         
-        # Track if buy, sell, OR last updated was directly tweaked on screen
         if (edited_buy != current_raw.at[idx, 'Buy Price']) or \
            (edited_sell != current_raw.at[idx, 'Sell Price']) or \
            (str(edited_updated) != str(current_raw.at[idx, 'Last Updated'])):
