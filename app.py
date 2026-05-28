@@ -16,7 +16,6 @@ st.markdown("Dynamic execution platform. Manage assets via the unified grid, sid
 # --- SESSION STATE INITIALIZATION ---
 if 'raw_portfolio' not in st.session_state:
     st.session_state.raw_portfolio = None
-# NEW: Initialize tracking fields for our Level-2 session cache
 if 'market_cache' not in st.session_state:
     st.session_state.market_cache = {}
 if 'cache_timestamp' not in st.session_state:
@@ -48,7 +47,6 @@ with st.sidebar:
                 else:
                     st.session_state.raw_portfolio = new_row
                 
-                # NEW: Clear timestamp when a new stock is added so it updates instantly
                 st.session_state.cache_timestamp = None
                 st.success(f"Added {new_ticker} successfully!")
                 st.rerun()
@@ -65,7 +63,6 @@ with st.sidebar:
         st.rerun()
         
     if st.button("🔄 Force Refresh Market Data", use_container_width=True):
-        # NEW: Resetting the timestamp forces an immediate redownload from Yahoo Finance
         st.session_state.cache_timestamp = None
         st.cache_data.clear()
         st.rerun()
@@ -94,51 +91,66 @@ if st.session_state.raw_portfolio is None:
                         "Last Updated": formatted_date
                     })
                 st.session_state.raw_portfolio = pd.DataFrame(initial_data)
-                st.session_state.cache_timestamp = None  # Clear cache for fresh data on import
+                st.session_state.cache_timestamp = None 
                 st.success("Watchlist database successfully initialized from Excel!")
                 st.rerun()
         except Exception as e:
             st.error(f"Error parsing uploaded file: {e}")
 
-# --- WORKING ENGINE WITH ADDED 8-HOUR SESSION MEMORY GUARD ---
+# --- NEW OPTIMIZED ENGINE: HIGH-SPEED SAFE BATCH DOWNLOADER ---
 @st.cache_data(ttl=86400)
 def fetch_daily_market_snapshots(tickers_tuple):
     market_snapshots = {}
     if not tickers_tuple:
         return market_snapshots
-    for ticker in tickers_tuple:
-        try:
-            stock = yf.Ticker(ticker)
-            hist = stock.history(period="2y")
-            if not hist.empty:
-                current_price = round(hist['Close'].iloc[-1], 2)
-                price_90d_ago = round(hist['Close'].iloc[-64], 2) if len(hist) >= 64 else round(hist['Close'].iloc[0], 2)
+        
+    try:
+        # One request handles all tickers simultaneously
+        data = yf.download(list(tickers_tuple), period="2y", group_by='ticker', progress=False)
+        
+        for ticker in tickers_tuple:
+            try:
+                # 1. Safely isolate single ticker dataframe from yfinance MultiIndex output
+                if isinstance(data.columns, pd.MultiIndex):
+                    if ticker in data.columns.levels[0]:
+                        hist = data[ticker].dropna(subset=['Close'])
+                    else:
+                        continue
+                else:
+                    # Fallback for solitary ticker inputs where yfinance returns a flat index
+                    hist = data.dropna(subset=['Close'])
                 
-                market_snapshots[ticker] = {
-                    "current_price": current_price,
-                    "historical_closes": [round(x, 2) for x in hist['Close'].iloc[::-1].tolist()],
-                    "price_1w_ago": round(hist['Close'].iloc[-6], 2) if len(hist) >= 6 else round(hist['Close'].iloc[0], 2),
-                    "price_90d_ago": price_90d_ago
-                }
-        except Exception:
-            pass
+                # 2. Extract metrics safely if data exists
+                if not hist.empty:
+                    current_price = round(float(hist['Close'].iloc[-1]), 2)
+                    price_90d_ago = round(float(hist['Close'].iloc[-64]), 2) if len(hist) >= 64 else round(float(hist['Close'].iloc[0]), 2)
+                    price_1w_ago = round(float(hist['Close'].iloc[-6]), 2) if len(hist) >= 6 else round(float(hist['Close'].iloc[0]), 2)
+                    
+                    market_snapshots[ticker] = {
+                        "current_price": current_price,
+                        "historical_closes": [round(float(x), 2) for x in hist['Close'].iloc[::-1].tolist()],
+                        "price_1w_ago": price_1w_ago,
+                        "price_90d_ago": price_90d_ago
+                    }
+            except Exception:
+                pass # Gracefully skip broken tickers
+    except Exception as e:
+        st.error(f"Failed to fetch market batch update: {e}")
+        
     return market_snapshots
 
 # --- APPLICATION LOGIC ---
 if st.session_state.raw_portfolio is not None:
     active_tickers = tuple(st.session_state.raw_portfolio['Ticker'].unique())
     
-    # NEW: Check if memory cache exists and is under 8 hours (28,800 seconds) old
+    # Check Level-2 Memory Caching layer before running download engine
     now = datetime.datetime.now()
     if (st.session_state.cache_timestamp and 
         (now - st.session_state.cache_timestamp).total_seconds() < 28800 and 
         st.session_state.market_cache):
-        # Instant execution from RAM memory
         daily_data = st.session_state.market_cache
     else:
-        # Pull from the yfinance backend engine
         daily_data = fetch_daily_market_snapshots(active_tickers)
-        # Store securely inside Level-2 cache state variables
         st.session_state.market_cache = daily_data
         st.session_state.cache_timestamp = now
     
@@ -148,7 +160,7 @@ if st.session_state.raw_portfolio is not None:
     for _, row in st.session_state.raw_portfolio.iterrows():
         ticker, buy_target, sell_target, last_updated = row['Ticker'], row['Buy Price'], row['Sell Price'], row['Last Updated']
         
-        if ticker in daily_data:
+        if ticker in daily_data and daily_data[ticker]:
             current_price = daily_data[ticker]["current_price"]
             closes_backward = daily_data[ticker]["historical_closes"]
             weekly_perf = ((current_price - daily_data[ticker]["price_1w_ago"]) / daily_data[ticker]["price_1w_ago"]) * 100
@@ -187,20 +199,17 @@ if st.session_state.raw_portfolio is not None:
         
     df_results = pd.DataFrame(processed_data)
     
-    # Sort execution grid automatically based on days below target (descending)
     if not df_results.empty:
         df_results = df_results.iloc[
             df_results['Days Below Buy Target'].fillna(-1).sort_values(ascending=False).index
         ].reset_index(drop=True)
         
-    # Generate Top Weekly Drops Data (Worse than -10%, max 10)
     if top_drops_data:
         df_all_drops = pd.DataFrame(top_drops_data)
         df_top_10_drops = df_all_drops[df_all_drops['Weekly Change %'] <= -10.0].sort_values(by="Weekly Change %").head(10)
     else:
         df_top_10_drops = pd.DataFrame(columns=["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"])
 
-    # Generate 90-Day Macro Drops Data (Worse than -25%, max 25)
     if macro_drops_data:
         df_all_macro = pd.DataFrame(macro_drops_data)
         df_top_90d_drops = df_all_macro[df_all_macro['90-Day Decline'] <= -25.0].sort_values(by="90-Day Decline").head(25)
