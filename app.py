@@ -245,4 +245,4 @@ if st.session_state.raw_portfolio is not None:
         st.rerun()
 
 else:
-    st.info("💡 App is live. Awaiting file execution. Upload an Excel workbook containing 'Ticker', 'Buy Price', 'Sell Price', and 'Last
+    st.info("💡 App is live. Awaiting file execution. Upload an Excel workbook containing 'Ticker', 'Buy Price', 'Sell Price', and 'Last' columns to begin.")
