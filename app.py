@@ -1,7 +1,6 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-from datetime import datetime
 
 # Set up clean page configuration
 st.set_page_config(
@@ -27,6 +26,7 @@ with st.sidebar:
         new_ticker = st.text_input("Ticker Symbol (e.g., AAPL)").strip().upper()
         new_buy = st.number_input("Buy Target Price ($)", min_value=0.0, step=0.01, format="%.2f")
         new_sell = st.number_input("Sell Profit Price ($)", min_value=0.0, step=0.01, format="%.2f")
+        new_updated = st.text_input("Last Updated Note/Date (e.g., 2026-05-28)")
         submit_button = st.form_submit_button("Add to Watchlist")
         
         if submit_button:
@@ -35,12 +35,12 @@ with st.sidebar:
             elif new_buy <= 0 or new_sell <= 0:
                 st.error("Prices must be greater than $0.00.")
             else:
-                # Create the new row structure
+                # Create the new row structure with user-defined update string
                 new_row = pd.DataFrame([{
                     "Ticker": new_ticker,
                     "Buy Price": float(new_buy),
                     "Sell Price": float(new_sell),
-                    "Last Updated": datetime.now().strftime("%Y-%m-%d %H:%M")
+                    "Last Updated": str(new_updated).strip()
                 }])
                 
                 # Append to existing table or initialize a brand new one
@@ -58,7 +58,7 @@ with st.sidebar:
 
     st.write("---")
     st.header("⚙️ Settings & System")
-    st.caption("Double-click any cell in 'Buy Price' or 'Sell Price' to update targets. The tracking status and 'Days Below' calculation will update instantly.")
+    st.caption("Double-click any cell in 'Buy Price', 'Sell Price', or 'Last Updated' to make inline adjustments.")
     
     # Manual Cache Override Button
     if st.button("🔄 Force Refresh Market Data"):
@@ -73,7 +73,8 @@ if uploaded_file is not None:
         raw_df = pd.read_excel(uploaded_file)
         raw_df.columns = [str(col).strip().title() for col in raw_df.columns]
         
-        required_cols = ['Ticker', 'Buy Price', 'Sell Price']
+        # Updated requirement to ensure 'Last Updated' is parsed from your spreadsheet
+        required_cols = ['Ticker', 'Buy Price', 'Sell Price', 'Last Updated']
         if not all(col in raw_df.columns for col in required_cols):
             st.error(f"Mapping Error: Spreadsheet must contain these exact columns: {required_cols}")
         else:
@@ -83,7 +84,7 @@ if uploaded_file is not None:
                     "Ticker": str(row['Ticker']).strip().upper(),
                     "Buy Price": float(row['Buy Price']),
                     "Sell Price": float(row['Sell Price']),
-                    "Last Updated": datetime.now().strftime("%Y-%m-%d %H:%M")
+                    "Last Updated": str(row['Last Updated']).strip() if pd.notna(row['Last Updated']) else ""
                 })
             st.session_state.raw_portfolio = pd.DataFrame(initial_data)
     except Exception as e:
@@ -200,25 +201,30 @@ if st.session_state.raw_portfolio is not None:
             "Sell Price": st.column_config.NumberColumn("Sell Price (Double-Click to Edit)", min_value=0.0, format="$%.2f"),
             "Status": st.column_config.TextColumn("Status", disabled=True),
             "Days Below Buy Target": st.column_config.TextColumn("Days Below Buy Target", disabled=True),
-            "Last Updated": st.column_config.TextColumn("Last Updated", disabled=True)
+            "Last Updated": st.column_config.TextColumn("Last Updated (Double-Click to Edit)", disabled=False)
         },
         use_container_width=True,
         hide_index=True,
         key="unified_portfolio_editor"
     )
     
-    # Capture grid spreadsheet cell updates
+    # Capture grid edits made to manual parameters
     current_raw = st.session_state.raw_portfolio.copy()
     has_changed = False
     
     for idx in range(len(response_editor)):
         edited_buy = response_editor.iloc[idx]['Buy Price']
         edited_sell = response_editor.iloc[idx]['Sell Price']
+        edited_updated = response_editor.iloc[idx]['Last Updated']
         
-        if (edited_buy != current_raw.at[idx, 'Buy Price']) or (edited_sell != current_raw.at[idx, 'Sell Price']):
+        # Track if buy, sell, OR last updated was directly tweaked on screen
+        if (edited_buy != current_raw.at[idx, 'Buy Price']) or \
+           (edited_sell != current_raw.at[idx, 'Sell Price']) or \
+           (str(edited_updated) != str(current_raw.at[idx, 'Last Updated'])):
+            
             current_raw.at[idx, 'Buy Price'] = edited_buy
             current_raw.at[idx, 'Sell Price'] = edited_sell
-            current_raw.at[idx, 'Last Updated'] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            current_raw.at[idx, 'Last Updated'] = str(edited_updated).strip()
             has_changed = True
             
     if has_changed:
@@ -226,4 +232,4 @@ if st.session_state.raw_portfolio is not None:
         st.rerun()
 
 else:
-    st.info("💡 App is live. Awaiting file execution. Upload an Excel workbook or add a single asset using the sidebar form to populate valuations.")
+    st.info("💡 App is live. Awaiting file execution. Upload an Excel workbook containing 'Ticker', 'Buy Price', 'Sell Price', and 'Last Updated' columns to begin.")
