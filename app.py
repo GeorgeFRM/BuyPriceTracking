@@ -299,7 +299,8 @@ if not raw_portfolio_df.empty:
         try:
             with conn.session as session:
                 for tk in deleted_tickers:
-                    session.execute(text("DELETE FROM watchlist WHERE ticker = :tk;"), {"tk": tk})
+                    # Enforce double quotes around "Ticker"
+                    session.execute(text('DELETE FROM watchlist WHERE "Ticker" = :tk;'), {"tk": tk})
                 session.commit()
             has_changed = True
         except Exception as e:
@@ -313,14 +314,15 @@ if not raw_portfolio_df.empty:
                     if idx < len(df_results):
                         target_ticker = df_results.at[idx, 'Ticker']
                         
+                        # Enforce exact database column name casing in the UPDATE blocks
                         if "Buy Price" in changes:
-                            session.execute(text("UPDATE watchlist SET buy_price = :val WHERE ticker = :tk;"), {"val": float(changes["Buy Price"]), "tk": target_ticker})
+                            session.execute(text('UPDATE watchlist SET "Buy Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Buy Price"]), "tk": target_ticker})
                         if "Sell Price" in changes:
-                            session.execute(text("UPDATE watchlist SET sell_price = :val WHERE ticker = :tk;"), {"val": float(changes["Sell Price"]), "tk": target_ticker})
+                            session.execute(text('UPDATE watchlist SET "Sell Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Sell Price"]), "tk": target_ticker})
                         if "Last Updated" in changes:
-                            session.execute(text("UPDATE watchlist SET last_updated = :val WHERE ticker = :tk;"), {"val": str(changes["Last Updated"]).strip(), "tk": target_ticker})
+                            session.execute(text('UPDATE watchlist SET "Last Updated" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Last Updated"]).strip(), "tk": target_ticker})
                         if "Group" in changes:
-                            session.execute(text('UPDATE watchlist SET "group" = :val WHERE ticker = :tk;'), {"val": str(changes["Group"]).strip(), "tk": target_ticker})
+                            session.execute(text('UPDATE watchlist SET "Group" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Group"]).strip(), "tk": target_ticker})
                 session.commit()
             has_changed = True
         except Exception as e:
