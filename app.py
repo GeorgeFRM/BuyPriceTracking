@@ -212,14 +212,6 @@ if not raw_portfolio_df.empty:
         })
         
     df_results = pd.DataFrame(processed_data)
-    
-    # --- DEFAULT SORT ENGINE: SORT BY STREAK DESCENDING, NULLS LAST ---
-    if not df_results.empty:
-        df_results = df_results.sort_values(
-            by="Days Below Buy Target", 
-            ascending=False, 
-            na_position="last"
-        ).reset_index(drop=True)
         
     df_top_10_drops = pd.DataFrame(top_drops_data) if top_drops_data else pd.DataFrame()
     if not df_top_10_drops.empty:
@@ -246,13 +238,43 @@ if not raw_portfolio_df.empty:
     with tab1:
         st.subheader("Unified Execution Engine")
         
+        # Format display status values
         df_results_viz = df_results.copy()
         def get_clean_status(status):
             if "Buy" in status: return "Buy Zone"
             if "Sell" in status: return "Sell Zone"
             return "Hold / Monitor"
-        
         df_results_viz["Status"] = df_results_viz["Status"].apply(get_clean_status)
+
+        # --- PROGRAMMATIC SORT ENGINE CONTROLLERS ---
+        col_sort1, col_sort2 = st.columns([2, 1])
+        with col_sort1:
+            sort_selection = st.selectbox(
+                "Sort Table By Column:",
+                options=["Streak", "Ticker", "Group", "Buy Price", "Current Market", "Sell Price", "Status", "Last Sync Date"],
+                index=0
+            )
+        with col_sort2:
+            sort_direction = st.radio("Order Direction:", options=["Descending", "Ascending"], horizontal=True, index=0)
+
+        # Map display names back to raw dataframe columns
+        sort_mapping = {
+            "Streak": "Days Below Buy Target",
+            "Ticker": "Ticker",
+            "Group": "Group",
+            "Buy Price": "Buy Price",
+            "Current Market": "Current Market",
+            "Sell Price": "Sell Price",
+            "Status": "Status",
+            "Last Sync Date": "Last Updated"
+        }
+        
+        # Sort values cleanly before parsing to layout editor
+        df_results_viz = df_results_viz.sort_values(
+            by=sort_mapping[sort_selection],
+            ascending=(sort_direction == "Ascending"),
+            na_position="last"
+        ).reset_index(drop=True)
 
         response_editor = st.data_editor(
             df_results_viz,
@@ -278,7 +300,7 @@ if not raw_portfolio_df.empty:
         has_changed = False
         
         if grid_state.get("deleted_rows"):
-            deleted_tickers = df_results.iloc[grid_state["deleted_rows"]]['Ticker'].tolist()
+            deleted_tickers = df_results_viz.iloc[grid_state["deleted_rows"]]['Ticker'].tolist()
             try:
                 with conn.session as session:
                     for tk in deleted_tickers:
@@ -293,8 +315,8 @@ if not raw_portfolio_df.empty:
                 with conn.session as session:
                     for str_idx, changes in grid_state["edited_rows"].items():
                         idx = int(str_idx)
-                        if idx < len(df_results):
-                            target_ticker = df_results.at[idx, 'Ticker']
+                        if idx < len(df_results_viz):
+                            target_ticker = df_results_viz.at[idx, 'Ticker']
                             
                             if "Buy Price" in changes:
                                 session.execute(text('UPDATE watchlist SET "Buy Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Buy Price"]), "tk": target_ticker})
