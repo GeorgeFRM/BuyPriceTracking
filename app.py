@@ -352,7 +352,7 @@ if not raw_portfolio_df.empty:
     def style_matrix_rows(row):
         if row['Status'] == "Buy":
             return ['background-color: rgba(46, 204, 113, 0.14); color: #2ecc71; font-weight: bold;'] * len(row)
-        elif row['Status'] == "Profit Zone":
+        elif row['Status'] == "Sell Zone":
             return ['background-color: rgba(41, 128, 185, 0.12); color: #3498db; font-weight: bold;'] * len(row)
         elif row['Status'] == "Data Offline":
             return ['color: #7f8c8d; font-style: italic;'] * len(row)
