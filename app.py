@@ -32,7 +32,7 @@ def fetch_watchlist_from_db():
             df["Buy Price"] = df["Buy Price"].astype(float)
             df["Sell Price"] = df["Sell Price"].astype(float)
             df["Last Updated"] = df["Last Updated"].fillna("").astype(str)
-            df["Group"] = df["Group"].fillna("Wishlist").astype(str).strip()
+            df["Group"] = df["Group"].fillna("Wishlist").astype(str).str.strip()
             return df
     except Exception as e:
         st.error(f"Database Read Fault: {e}")
