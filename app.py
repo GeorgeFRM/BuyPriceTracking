@@ -86,7 +86,7 @@ with st.sidebar:
     if st.button("🗑️ Clear Entire Database Portfolio", use_container_width=True):
         try:
             with conn.session as session:
-                session.execute("TRUNCATE TABLE watchlist;")
+                session.execute(text("TRUNCATE TABLE watchlist;"))
                 session.commit()
             st.session_state.market_cache = {}
             st.session_state.cache_timestamp = None
