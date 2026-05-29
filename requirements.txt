@@ -1,3 +1,5 @@
 streamlit
 yfinance
-openpyxl
+pandas
+psycopg2-binary
+sqlalchemy==2.0.29
