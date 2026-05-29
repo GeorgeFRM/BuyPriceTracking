@@ -242,6 +242,14 @@ if not raw_portfolio_df.empty:
     df_holding = df_results[df_results["Group"] == "Holding"].copy()
     col_h1, col_h2 = st.columns(2)
 
+# Helper to style the Holding tables
+    def color_holding_rows(val):
+        # Forest Green for Buy zone
+        if "Buy" in str(val): return 'background-color: #228B22; color: white'
+        # Red for Sell zone
+        if "Sell" in str(val): return 'background-color: #DC143C; color: white'
+        return ''
+    
     with col_h1:
         st.caption("Buy Zone (Below Buy Price or < 5% Over)")
         buy_zone = df_holding[df_holding["Current Market"] <= (df_holding["Buy Price"] * 1.05)].copy()
