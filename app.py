@@ -348,33 +348,35 @@ if not raw_portfolio_df.empty:
         else:
             st.info("No Target assets meet criteria.")
     
-# --- MAIN WATCHLIST GRID: SORTABLE & COLOR-CODED ---
-    st.subheader("Live Watchlist")
+# --- MAIN WATCHLIST GRID: SORTABLE, EDITABLE, & VISUAL ---
+    st.subheader("📊 Live Watchlist Execution Grid")
     
-    # Define your color logic for the display dataframe
-    def style_matrix_rows(row):
-        if row['Status'] == "Buy":
-            return ['background-color: rgba(46, 204, 113, 0.14); color: #2ecc71; font-weight: bold;'] * len(row)
-        elif row['Status'] == "Profit Zone":
-            return ['background-color: rgba(41, 128, 185, 0.12); color: #3498db; font-weight: bold;'] * len(row)
-        return [''] * len(row)
+    # Add status icons directly to the data so they are sortable
+    df_results_viz = df_results.copy()
+    def get_status_icon(status):
+        if status == "Buy": return "🟢 Buy"
+        if status == "Profit Zone": return "🔵 Sell"
+        return "⚪ Hold"
+    
+    df_results_viz["Status"] = df_results_viz["Status"].apply(get_status_icon)
 
-    # 1. Display the View (Color-coded + Sortable by clicking headers)
-    styled_df = df_results.style.format({"Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "Sell Price": "${:,.2f}"}).apply(style_matrix_rows, axis=1)
-    st.dataframe(styled_df, use_container_width=True, hide_index=False)
-
-    # 2. Provide the Edit capability in an Expander (to keep the main view clean)
-    with st.expander("✏️ Edit Watchlist Data"):
-        response_editor = st.data_editor(
-            df_results,
-            column_config={
-                "Ticker": st.column_config.TextColumn("Ticker", disabled=True), 
-                "Group": st.column_config.SelectboxColumn("Group", options=["Target", "Holding", "Wishlist"]),
-                "Buy Price": st.column_config.NumberColumn("Buy Price", format="$%.2f"),
-                "Sell Price": st.column_config.NumberColumn("Sell Price", format="$%.2f")
-            },
-            use_container_width=True, num_rows="dynamic", key="unified_portfolio_editor"
-        )
+    response_editor = st.data_editor(
+        df_results_viz,
+        column_config={
+            "Ticker": st.column_config.TextColumn("Ticker", disabled=True, width="small"), 
+            "Group": st.column_config.SelectboxColumn("Group (Edit)", options=["Target", "Holding", "Wishlist"], required=True, width="medium"),
+            "Buy Price": st.column_config.NumberColumn("Buy Price (Edit)", min_value=0.0, format="$%.2f", width="medium"),
+            "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f", width="medium"),
+            "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f", width="medium"),
+            "Status": st.column_config.TextColumn("Status", disabled=True, width="medium"),
+            "Days Below Buy Target": st.column_config.NumberColumn("Streak", disabled=True, format="%d days", width="small"),
+            "Last Updated": st.column_config.TextColumn("Last Updated")
+        },
+        use_container_width=True, 
+        hide_index=False, 
+        num_rows="dynamic", 
+        key="unified_portfolio_editor"
+    )
     
     # Grid Synchronizer SQL Writer Logic
     grid_state = st.session_state.unified_portfolio_editor
