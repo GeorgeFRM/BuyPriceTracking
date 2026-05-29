@@ -22,7 +22,6 @@ except Exception as e:
     st.stop()
 
 def fetch_watchlist_from_db():
-    """Queries the centralized SQL database for tracked assets."""
     try:
         df = conn.query('SELECT "Ticker", "Buy Price", "Sell Price", "Last Updated", "Group" FROM watchlist;', ttl=0)
         if df is not None and not df.empty:
@@ -37,7 +36,6 @@ def fetch_watchlist_from_db():
     return pd.DataFrame(columns=["Ticker", "Buy Price", "Sell Price", "Last Updated", "Group"])
 
 def get_table_height(df, max_height=400):
-    """Dynamically calculates table height to eliminate unnecessary scrolling for short datasets."""
     if df.empty:
         return 100
     calculated_height = (len(df) * 35) + 45
@@ -49,7 +47,6 @@ if 'market_cache' not in st.session_state:
 if 'cache_timestamp' not in st.session_state:
     st.session_state.cache_timestamp = None
 
-# Fresh pull from database on refresh
 raw_portfolio_df = fetch_watchlist_from_db()
 
 # --- SIDEBAR: INTERACTION CONSOLE ---
@@ -212,6 +209,13 @@ if not raw_portfolio_df.empty:
         })
         
     df_results = pd.DataFrame(processed_data)
+    
+    if not df_results.empty:
+        df_results = df_results.sort_values(
+            by=["Days Below Buy Target", "Ticker"], 
+            ascending=[False, True], 
+            na_position="last"
+        ).reset_index(drop=True)
         
     df_top_10_drops = pd.DataFrame(top_drops_data) if top_drops_data else pd.DataFrame()
     if not df_top_10_drops.empty:
@@ -232,7 +236,7 @@ if not raw_portfolio_df.empty:
         
     st.write("---")
 
-    # --- REARRANGED TABBED INTERFACE ---
+    # --- TABBED INTERFACE ---
     tab1, tab2, tab3 = st.tabs(["🚨 Portfolio Alerts", "📉 Target / Wishlist Alerts", "📊 Complete Watchlist"])
 
     # --- TAB 1: PORTFOLIO ALERTS ---
@@ -366,7 +370,6 @@ if not raw_portfolio_df.empty:
     with tab3:
         st.subheader("Unified Execution Engine")
         
-        # Format display status values
         df_results_viz = df_results.copy()
         def get_clean_status(status):
             if "Buy" in status: return "Buy Zone"
@@ -374,7 +377,6 @@ if not raw_portfolio_df.empty:
             return "Hold / Monitor"
         df_results_viz["Status"] = df_results_viz["Status"].apply(get_clean_status)
 
-        # Programmatic Sort Controllers
         col_sort1, col_sort2 = st.columns([2, 1])
         with col_sort1:
             sort_selection = st.selectbox(
@@ -385,7 +387,6 @@ if not raw_portfolio_df.empty:
         with col_sort2:
             sort_direction = st.radio("Order Direction:", options=["Descending", "Ascending"], horizontal=True, index=0)
 
-        # Map display names back to raw dataframe columns
         sort_mapping = {
             "Streak": "Days Below Buy Target",
             "Ticker": "Ticker",
@@ -397,7 +398,6 @@ if not raw_portfolio_df.empty:
             "Last Sync Date": "Last Updated"
         }
         
-        # Sort values cleanly before parsing to layout editor
         df_results_viz = df_results_viz.sort_values(
             by=sort_mapping[sort_selection],
             ascending=(sort_direction == "Ascending"),
@@ -423,7 +423,6 @@ if not raw_portfolio_df.empty:
             key="unified_portfolio_editor"
         )
         
-        # Grid Synchronizer Logic
         grid_state = st.session_state.unified_portfolio_editor
         has_changed = False
         
