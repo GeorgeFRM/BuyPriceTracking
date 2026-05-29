@@ -116,7 +116,7 @@ if raw_portfolio_df.empty:
             else:
                 with conn.session as session:
                     # Clear any hanging records before bulk execution
-                    session.execute("TRUNCATE TABLE watchlist;")
+                    session.execute(text("TRUNCATE TABLE watchlist;"))
                     
                     for _, row in raw_df.iterrows():
                         dt = row['Last Updated']
@@ -124,7 +124,7 @@ if raw_portfolio_df.empty:
                         clean_tick = str(row['Ticker']).strip().upper()
                         
                         if re.match(r'^[A-Z0-9\.\-=]{1,10}$', clean_tick):
-                            session.execute(
+                            session.execute(text(
                                 "INSERT INTO watchlist (ticker, buy_price, sell_price, last_updated) VALUES (:tk, :buy, :sell, :dt);",
                                 {
                                     "tk": clean_tick, 
@@ -132,7 +132,7 @@ if raw_portfolio_df.empty:
                                     "sell": float(row['Sell Price']), 
                                     "dt": re.sub(r'[^0-9/:-]', '', formatted_date).strip()
                                 }
-                            )
+                            ))
                     session.commit()
                 st.success("Cloud Database successfully populated from spreadsheet parsing array!")
                 st.rerun()
