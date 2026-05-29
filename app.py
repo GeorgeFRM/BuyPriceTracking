@@ -5,7 +5,7 @@ import datetime
 import re
 from sqlalchemy import text
 
-# Set up clean page configuration
+# --- SYSTEM STAGE CONFIGURATION ---
 st.set_page_config(
     page_title="Institutional Watchlist Tracker",
     page_icon="📈",
@@ -13,10 +13,9 @@ st.set_page_config(
 )
 
 st.title("📈 Stock Target Monitor & Execution Dashboard")
-st.markdown("Dynamic execution platform. Sandbox environment powered by a Cloud PostgreSQL Database Connection layer.")
+st.markdown("Dynamic execution platform. Powered by a Cloud PostgreSQL Database Connection layer.")
 
-# --- NEW: PRODUCTION-GRADE SQL ENGINE CONNECTION ---
-# Leverages Streamlit's native relational SQL driver (Zero local machine footprint)
+# --- PRODUCTION-GRADE SQL ENGINE CONNECTION ---
 try:
     conn = st.connection("supabase_db", type="sql", driver="psycopg2")
 except Exception as e:
@@ -26,16 +25,18 @@ except Exception as e:
 def fetch_watchlist_from_db():
     """Queries the centralized SQL database for tracked assets."""
     try:
-        df = conn.query("SELECT ticker, buy_price AS \"Buy Price\", sell_price AS \"Sell Price\", last_updated AS \"Last Updated\" FROM watchlist;", ttl=0)
+        # Pull core metrics including the customized Group field mapping
+        df = conn.query('SELECT ticker, buy_price AS "Buy Price", sell_price AS "Sell Price", last_updated AS "Last Updated", "group" AS "Group" FROM watchlist;', ttl=0)
         if df is not None and not df.empty:
             df["Ticker"] = df["Ticker"].astype(str).str.upper()
             df["Buy Price"] = df["Buy Price"].astype(float)
             df["Sell Price"] = df["Sell Price"].astype(float)
             df["Last Updated"] = df["Last Updated"].fillna("").astype(str)
+            df["Group"] = df["Group"].fillna("Wishlist").astype(str).strip()
             return df
     except Exception as e:
         st.error(f"Database Read Fault: {e}")
-    return pd.DataFrame(columns=["Ticker", "Buy Price", "Sell Price", "Last Updated"])
+    return pd.DataFrame(columns=["Ticker", "Buy Price", "Sell Price", "Last Updated", "Group"])
 
 # --- SESSION STATE INITIALIZATION ---
 if 'market_cache' not in st.session_state:
@@ -43,10 +44,10 @@ if 'market_cache' not in st.session_state:
 if 'cache_timestamp' not in st.session_state:
     st.session_state.cache_timestamp = None
 
-# Pull fresh core dataframe straight from the network SQL layer
+# Pull fresh core data straight from the network SQL layer on frame refresh
 raw_portfolio_df = fetch_watchlist_from_db()
 
-# --- SIDEBAR: USER INTERACTION PANEL ---
+# --- SIDEBAR: INTERACTION CONSOLE ---
 with st.sidebar:
     st.header("📋 Data Management")
     
@@ -55,7 +56,11 @@ with st.sidebar:
         new_ticker = st.text_input("Ticker Symbol (e.g., AAPL)").strip().upper()
         new_buy = st.number_input("Buy Target Price ($)", min_value=0.0, step=0.01, format="%.2f")
         new_sell = st.number_input("Sell Profit Price ($)", min_value=0.0, step=0.01, format="%.2f")
-        new_updated = st.text_input("Last Updated (yyyy/mm/dd)", placeholder="2026/05/29")
+        new_updated = st.text_input("Last Updated (yyyy/mm/dd)", placeholder=datetime.date.today().strftime("%Y/%m/%d"))
+        
+        # Group Dropdown selector utilizing your explicit operational categories
+        new_group = st.selectbox("Strategic Group Category", ["Target", "Holding", "Wishlist"])
+        
         submit_button = st.form_submit_button("Add to Watchlist")
         
         if submit_button:
@@ -63,17 +68,19 @@ with st.sidebar:
                 st.error("Invalid Input Data: Ensure ticker follows standard asset naming constraints.")
             else:
                 clean_date = re.sub(r'[^0-9/:-]', '', new_updated).strip()
+                if not clean_date:
+                    clean_date = datetime.date.today().strftime("%Y/%m/%d")
                 try:
                     with conn.session as session:
-                        # SQL UPSERT: Inserts new asset or updates pricing if ticker exists
+                        # SQL UPSERT: Inserts new asset or updates data if ticker already exists
                         session.execute(
-                            """
-                            INSERT INTO watchlist (ticker, buy_price, sell_price, last_updated) 
-                            VALUES (:tk, :buy, :sell, :dt)
+                            text("""
+                            INSERT INTO watchlist (ticker, buy_price, sell_price, last_updated, "group") 
+                            VALUES (:tk, :buy, :sell, :dt, :gp)
                             ON CONFLICT (ticker) 
-                            DO UPDATE SET buy_price = EXCLUDED.buy_price, sell_price = EXCLUDED.sell_price, last_updated = EXCLUDED.last_updated;
-                            """,
-                            {"tk": new_ticker, "buy": float(new_buy), "sell": float(new_sell), "dt": clean_date}
+                            DO UPDATE SET buy_price = EXCLUDED.buy_price, sell_price = EXCLUDED.sell_price, last_updated = EXCLUDED.last_updated, "group" = EXCLUDED."group";
+                            """),
+                            {"tk": new_ticker, "buy": float(new_buy), "sell": float(new_sell), "dt": clean_date, "gp": new_group}
                         )
                         session.commit()
                     st.success(f"Added/Updated {new_ticker} successfully inside Cloud Database!")
@@ -87,7 +94,7 @@ with st.sidebar:
     if st.button("🗑️ Clear Entire Database Portfolio", use_container_width=True):
         try:
             with conn.session as session:
-                session.execute(text("TRUNCATE TABLE watchlist;"))
+                session.execute(text("DELETE FROM watchlist;"))
                 session.commit()
             st.session_state.market_cache = {}
             st.session_state.cache_timestamp = None
@@ -101,44 +108,6 @@ with st.sidebar:
         st.session_state.cache_timestamp = None
         st.cache_data.clear()
         st.rerun()
-
-# --- ONE-TIME EXCEL INITIALIZATION SEED ---
-if raw_portfolio_df.empty:
-    uploaded_file = st.file_uploader("Drag and drop your 600+ asset watchlist Excel file here to initialize database tables", type=["xlsx"], key="excel_uploader")
-
-    if uploaded_file is not None:
-        try:
-            raw_df = pd.read_excel(uploaded_file)
-            raw_df.columns = [str(col).strip().title() for col in raw_df.columns]
-            
-            required_cols = ['Ticker', 'Buy Price', 'Sell Price', 'Last Updated']
-            if not all(col in raw_df.columns for col in required_cols):
-                st.error(f"Mapping Error: Spreadsheet must contain these exact columns: {required_cols}")
-            else:
-                with conn.session as session:
-                    # Clear any hanging records before bulk execution
-                    session.execute(text("TRUNCATE TABLE watchlist;"))
-                    
-                    for _, row in raw_df.iterrows():
-                        dt = row['Last Updated']
-                        formatted_date = dt.strftime("%Y/%m/%d") if pd.notna(dt) and hasattr(dt, 'strftime') else str(dt).strip() if pd.notna(dt) else ""
-                        clean_tick = str(row['Ticker']).strip().upper()
-                        
-                        if re.match(r'^[A-Z0-9\.\-=]{1,10}$', clean_tick):
-                            session.execute(text(
-                                "INSERT INTO watchlist (ticker, buy_price, sell_price, last_updated) VALUES (:tk, :buy, :sell, :dt);",
-                                {
-                                    "tk": clean_tick, 
-                                    "buy": float(row['Buy Price']), 
-                                    "sell": float(row['Sell Price']), 
-                                    "dt": re.sub(r'[^0-9/:-]', '', formatted_date).strip()
-                                }
-                            ))
-                    session.commit()
-                st.success("Cloud Database successfully populated from spreadsheet parsing array!")
-                st.rerun()
-        except Exception as e:
-            st.error(f"Error compiling Excel matrix into database statements: {e}")
 
 # --- HIGH-SPEED SAFE BATCH DOWNLOADER ---
 @st.cache_data(ttl=86400)
@@ -197,7 +166,7 @@ if not raw_portfolio_df.empty:
     buy_alerts, sell_alerts = 0, 0
     
     for _, row in raw_portfolio_df.iterrows():
-        ticker, buy_target, sell_target, last_updated = row['Ticker'], row['Buy Price'], row['Sell Price'], row['Last Updated']
+        ticker, buy_target, sell_target, last_updated, group_cat = row['Ticker'], row['Buy Price'], row['Sell Price'], row['Last Updated'], row['Group']
         
         if ticker in daily_data and daily_data[ticker]:
             current_price = daily_data[ticker]["current_price"]
@@ -224,19 +193,19 @@ if not raw_portfolio_df.empty:
                 status, days_display = "Hold / Monitor", None
                 
             top_drops_data.append({
-                "Ticker": ticker, "Buy Price": buy_target, "Current Market": current_price, 
+                "Ticker": ticker, "Group": group_cat, "Buy Price": buy_target, "Current Market": current_price, 
                 "Weekly Change %": weekly_perf, "Last Updated": last_updated
             })
             
             macro_drops_data.append({
-                "Ticker": ticker, "Buy Price": buy_target, "Current Market": current_price, 
+                "Ticker": ticker, "Group": group_cat, "Buy Price": buy_target, "Current Market": current_price, 
                 "90-Day Decline": macro_perf, "Last Updated": last_updated
             })
         else:
             current_price, status, days_display = 0.0, "Data Offline", None
             
         processed_data.append({
-            "Ticker": ticker, "Buy Price": buy_target, "Current Market": current_price,
+            "Ticker": ticker, "Group": group_cat, "Buy Price": buy_target, "Current Market": current_price,
             "Sell Price": sell_target, "Status": status, "Days Below Buy Target": days_display, "Last Updated": last_updated
         })
         
@@ -251,13 +220,13 @@ if not raw_portfolio_df.empty:
         df_all_drops = pd.DataFrame(top_drops_data)
         df_top_10_drops = df_all_drops[df_all_drops['Weekly Change %'] <= -10.0].sort_values(by="Weekly Change %").head(10)
     else:
-        df_top_10_drops = pd.DataFrame(columns=["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"])
+        df_top_10_drops = pd.DataFrame(columns=["Ticker", "Group", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"])
 
     if macro_drops_data:
         df_all_macro = pd.DataFrame(macro_drops_data)
         df_top_90d_drops = df_all_macro[df_all_macro['90-Day Decline'] <= -25.0].sort_values(by="90-Day Decline").head(25)
     else:
-        df_top_90d_drops = pd.DataFrame(columns=["Ticker", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"])
+        df_top_90d_drops = pd.DataFrame(columns=["Ticker", "Group", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"])
 
     # KPI Layout Ribbon Panel
     col1, col2, col3 = st.columns(3)
@@ -309,7 +278,8 @@ if not raw_portfolio_df.empty:
     response_editor = st.data_editor(
         styled_df,
         column_config={
-            "Ticker": st.column_config.TextColumn("Ticker", disabled=True, width="medium"), 
+            "Ticker": st.column_config.TextColumn("Ticker", disabled=True, width="small"), 
+            "Group": st.column_config.SelectboxColumn("Group (Edit)", options=["Target", "Holding", "Wishlist"], required=True, width="medium"),
             "Buy Price": st.column_config.NumberColumn("Buy Price (Edit)", min_value=0.0, format="$%.2f", width="medium"),
             "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f", width="medium"),
             "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f", width="medium"),
@@ -329,7 +299,7 @@ if not raw_portfolio_df.empty:
         try:
             with conn.session as session:
                 for tk in deleted_tickers:
-                    session.execute("DELETE FROM watchlist WHERE ticker = :tk;", {"tk": tk})
+                    session.execute(text("DELETE FROM watchlist WHERE ticker = :tk;"), {"tk": tk})
                 session.commit()
             has_changed = True
         except Exception as e:
@@ -343,13 +313,14 @@ if not raw_portfolio_df.empty:
                     if idx < len(df_results):
                         target_ticker = df_results.at[idx, 'Ticker']
                         
-                        # Map out edits dynamically and parse down parameterized UPDATE queries
                         if "Buy Price" in changes:
-                            session.execute("UPDATE watchlist SET buy_price = :val WHERE ticker = :tk;", {"val": float(changes["Buy Price"]), "tk": target_ticker})
+                            session.execute(text("UPDATE watchlist SET buy_price = :val WHERE ticker = :tk;"), {"val": float(changes["Buy Price"]), "tk": target_ticker})
                         if "Sell Price" in changes:
-                            session.execute("UPDATE watchlist SET sell_price = :val WHERE ticker = :tk;", {"val": float(changes["Sell Price"]), "tk": target_ticker})
+                            session.execute(text("UPDATE watchlist SET sell_price = :val WHERE ticker = :tk;"), {"val": float(changes["Sell Price"]), "tk": target_ticker})
                         if "Last Updated" in changes:
-                            session.execute("UPDATE watchlist SET last_updated = :val WHERE ticker = :tk;", {"val": str(changes["Last Updated"]).strip(), "tk": target_ticker})
+                            session.execute(text("UPDATE watchlist SET last_updated = :val WHERE ticker = :tk;"), {"val": str(changes["Last Updated"]).strip(), "tk": target_ticker})
+                        if "Group" in changes:
+                            session.execute(text('UPDATE watchlist SET "group" = :val WHERE ticker = :tk;'), {"val": str(changes["Group"]).strip(), "tk": target_ticker})
                 session.commit()
             has_changed = True
         except Exception as e:
@@ -358,4 +329,4 @@ if not raw_portfolio_df.empty:
     if has_changed:
         st.rerun()
 else:
-    st.info("💡 App database is currently empty. Drag and drop your asset watchlist Excel file above to initialize data.")
+    st.info("💡 App database is currently empty. Use the Supabase dashboard or the sidebar form panel to seed tickers.")
