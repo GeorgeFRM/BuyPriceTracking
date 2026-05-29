@@ -5,26 +5,25 @@ import datetime
 import re
 from sqlalchemy import text
 
-# --- SYSTEM STAGE CONFIGURATION ---
+# --- SYSTEM CONFIGURATION ---
 st.set_page_config(
     page_title="Institutional Watchlist Tracker",
     page_icon="📈",
     layout="wide"
 )
 
-st.title("Watchlist Tracker")
+st.title("📈 Watchlist Tracker")
 
-# --- PRODUCTION-GRADE SQL ENGINE CONNECTION ---
+# --- DATABASE CONNECTION ---
 try:
     conn = st.connection("supabase_db", type="sql", driver="psycopg2")
-except Exception as e:
-    st.error(f"Critical System Fault: Unable to bind secure cloud data pipeline. Verify secrets. {e}")
+ Dad exception as e:
+    st.error(f"Database Connection Error: Verify your secrets config. Details: {e}")
     st.stop()
 
 def fetch_watchlist_from_db():
     """Queries the centralized SQL database for tracked assets."""
     try:
-        # Pull core metrics including the customized Group field mapping
         df = conn.query('SELECT "Ticker", "Buy Price", "Sell Price", "Last Updated", "Group" FROM watchlist;', ttl=0)
         if df is not None and not df.empty:
             df["Ticker"] = df["Ticker"].astype(str).str.upper()
@@ -34,7 +33,7 @@ def fetch_watchlist_from_db():
             df["Group"] = df["Group"].fillna("Wishlist").astype(str).str.strip()
             return df
     except Exception as e:
-        st.error(f"Database Read Fault: {e}")
+        st.error(f"Database Read Error: {e}")
     return pd.DataFrame(columns=["Ticker", "Buy Price", "Sell Price", "Last Updated", "Group"])
 
 # --- SESSION STATE INITIALIZATION ---
@@ -43,7 +42,7 @@ if 'market_cache' not in st.session_state:
 if 'cache_timestamp' not in st.session_state:
     st.session_state.cache_timestamp = None
 
-# Pull fresh core data straight from the network SQL layer on frame refresh
+# Fresh pull from database on refresh
 raw_portfolio_df = fetch_watchlist_from_db()
 
 # --- SIDEBAR: INTERACTION CONSOLE ---
@@ -55,42 +54,40 @@ with st.sidebar:
         new_ticker = st.text_input("Ticker Symbol (e.g., AAPL)").strip().upper()
         new_buy = st.number_input("Buy Target Price ($)", min_value=0.0, step=0.01, format="%.2f")
         new_sell = st.number_input("Sell Profit Price ($)", min_value=0.0, step=0.01, format="%.2f")
-        new_updated = st.text_input("Last Updated (yyyy/mm/dd)", placeholder=datetime.date.today().strftime("%Y/%m/%d"))
         
-        # Group Dropdown selector utilizing your explicit operational categories
+        # Native date picker UI replacing brittle text/regex formatting
+        new_updated_date = st.date_input("Last Updated", datetime.date.today())
         new_group = st.selectbox("Strategic Group Category", ["Target", "Holding", "Wishlist"])
         
-        submit_button = st.form_submit_button("Add to Watchlist")
+        submit_button = st.form_submit_button("Add to Watchlist", use_container_width=True)
         
         if submit_button:
             if not new_ticker or not re.match(r'^[A-Z0-9\.\-=]{1,10}$', new_ticker) or new_buy <= 0 or new_sell <= 0:
-                st.error("Invalid Input Data: Ensure ticker follows standard asset naming constraints.")
+                st.error("Invalid Input: Verify asset constraints and pricing data.")
             else:
-                clean_date = re.sub(r'[^0-9/:-]', '', new_updated).strip()
-                if not clean_date:
-                    clean_date = datetime.date.today().strftime("%Y/%m/%d")
+                clean_date = new_updated_date.strftime("%Y/%m/%d")
                 try:
                     with conn.session as session:
-                        # SQL UPSERT: Inserts new asset or updates data if ticker already exists
+                        # Fixed critical bug: Standardized column identifier names matching your SELECT schema
                         session.execute(
                             text("""
-                            INSERT INTO watchlist (ticker, buy_price, sell_price, last_updated, "group") 
+                            INSERT INTO watchlist ("Ticker", "Buy Price", "Sell Price", "Last Updated", "Group") 
                             VALUES (:tk, :buy, :sell, :dt, :gp)
-                            ON CONFLICT (ticker) 
-                            DO UPDATE SET buy_price = EXCLUDED.buy_price, sell_price = EXCLUDED.sell_price, last_updated = EXCLUDED.last_updated, "group" = EXCLUDED."group";
+                            ON CONFLICT ("Ticker") 
+                            DO UPDATE SET "Buy Price" = EXCLUDED."Buy Price", "Sell Price" = EXCLUDED."Sell Price", "Last Updated" = EXCLUDED."Last Updated", "Group" = EXCLUDED."Group";
                             """),
                             {"tk": new_ticker, "buy": float(new_buy), "sell": float(new_sell), "dt": clean_date, "gp": new_group}
                         )
                         session.commit()
-                    st.success(f"Added/Updated {new_ticker} successfully inside Cloud Database!")
+                    st.success(f"Successfully processed {new_ticker}!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Write aborted by cloud security rules: {e}")
+                    st.error(f"Database Write Denied: {e}")
 
     st.write("---")
-    st.header("⚙️ Settings & System")
+    st.header("⚙️ System Control")
     
-    if st.button("🗑️ Clear Entire Database Portfolio", use_container_width=True):
+    if st.button("🗑️ Clear Entire Portfolio", use_container_width=True, type="secondary"):
         try:
             with conn.session as session:
                 session.execute(text("DELETE FROM watchlist;"))
@@ -98,17 +95,17 @@ with st.sidebar:
             st.session_state.market_cache = {}
             st.session_state.cache_timestamp = None
             st.cache_data.clear()
-            st.success("Cloud database successfully cleared!")
+            st.success("Watchlist database cleared!")
             st.rerun()
         except Exception as e:
             st.error(f"Flush sequence denied: {e}")
         
-    if st.button("🔄 Force Refresh Market Data", use_container_width=True):
+    if st.button("🔄 Force Refresh Market Data", use_container_width=True, type="primary"):
         st.session_state.cache_timestamp = None
         st.cache_data.clear()
         st.rerun()
 
-# --- HIGH-SPEED SAFE BATCH DOWNLOADER ---
+# --- MARKET snaps DATA DOWNLOADER ---
 @st.cache_data(ttl=86400)
 def fetch_daily_market_snapshots(tickers_tuple):
     market_snapshots = {}
@@ -142,15 +139,15 @@ def fetch_daily_market_snapshots(tickers_tuple):
             except Exception:
                 pass 
     except Exception as e:
-        st.error(f"Failed to fetch market batch update: {e}")
+        st.error(f"Failed to fetch market metrics from Yahoo Finance: {e}")
         
     return market_snapshots
 
-# --- APPLICATION LOGIC ---
+# --- MAIN APPLICATION LOGIC ---
 if not raw_portfolio_df.empty:
     active_tickers = tuple(raw_portfolio_df['Ticker'].unique())
     
-    # Check Level-2 Memory Caching layer (8 hours)
+    # 8-Hour Session Memory layer
     now = datetime.datetime.now()
     if (st.session_state.cache_timestamp and 
         (now - st.session_state.cache_timestamp).total_seconds() < 28800 and 
@@ -179,17 +176,19 @@ if not raw_portfolio_df.empty:
             
             days_below = 0
             if current_price <= buy_target:
-                status = "Buy"
+                status = "Buy Zone"
                 buy_alerts += 1
                 for p in closes_backward:
                     if p <= buy_target: days_below += 1
                     else: break
                 days_display = int(days_below)
             elif current_price >= sell_target:
-                status, days_display = "Sell Zone", None
+                status = "Sell Zone"
                 sell_alerts += 1
+                days_display = None
             else:
-                status, days_display = "Hold / Monitor", None
+                status = "Hold / Monitor"
+                days_display = None
                 
             top_drops_data.append({
                 "Ticker": ticker, "Group": group_cat, "Buy Price": buy_target, "Current Market": current_price, 
@@ -201,7 +200,7 @@ if not raw_portfolio_df.empty:
                 "90-Day Decline": macro_perf, "Last Updated": last_updated
             })
         else:
-            current_price, status, days_display = 0.0, "Data Offline", None
+            current_price, status, days_display = 0.0, "Offline", None
             
         processed_data.append({
             "Ticker": ticker, "Group": group_cat, "Buy Price": buy_target, "Current Market": current_price,
@@ -215,208 +214,217 @@ if not raw_portfolio_df.empty:
             df_results['Days Below Buy Target'].fillna(-1).sort_values(ascending=False).index
         ].reset_index(drop=True)
         
-    if top_drops_data:
-        df_all_drops = pd.DataFrame(top_drops_data)
-        df_top_10_drops = df_all_drops[df_all_drops['Weekly Change %'] <= -10.0].sort_values(by="Weekly Change %").head(10)
-    else:
-        df_top_10_drops = pd.DataFrame(columns=["Ticker", "Group", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"])
+    # Standardized fallback DataFrames
+    df_top_10_drops = pd.DataFrame(top_drops_data) if top_drops_data else pd.DataFrame()
+    if not df_top_10_drops.empty:
+        df_top_10_drops = df_top_10_drops[df_top_10_drops['Weekly Change %'] <= -10.0].sort_values(by="Weekly Change %").head(10)
+        
+    df_top_90d_drops = pd.DataFrame(macro_drops_data) if macro_drops_data else pd.DataFrame()
+    if not df_top_90d_drops.empty:
+        df_top_90d_drops = df_top_90d_drops[df_top_90d_drops['90-Day Decline'] <= -25.0].sort_values(by="90-Day Decline").head(25)
 
-    if macro_drops_data:
-        df_all_macro = pd.DataFrame(macro_drops_data)
-        df_top_90d_drops = df_all_macro[df_all_macro['90-Day Decline'] <= -25.0].sort_values(by="90-Day Decline").head(25)
-    else:
-        df_top_90d_drops = pd.DataFrame(columns=["Ticker", "Group", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"])
-
-    # KPI Layout Ribbon Panel
+    # --- KPI HEADER RIBBON ---
     col1, col2, col3 = st.columns(3)
     with col1:
         st.metric("Total Assets Tracked", len(df_results))
     with col2:
-        st.metric("Buy Targets Triggered", buy_alerts)
+        st.metric("Buy Targets Triggered", buy_alerts, delta=f"{buy_alerts} Active" if buy_alerts > 0 else None, delta_color="inverse")
     with col3:
-        st.metric("Profit Horizons Reached", sell_alerts)
-    st.write("---")
-
-        # --- SECTION 0: HOLDING (Side-by-Side Execution Zones) ---
-    st.markdown("### Holding Group At or Near Targets")
-    df_holding = df_results[df_results["Group"] == "Holding"].copy()
-    col_h1, col_h2 = st.columns(2)
-    
-    # Helper to style only the display tables
-    def color_holding_rows(val):
-        if "Buy" in str(val) or "above our Buy" in str(val): 
-            return 'background-color: #228B22; color: white'
-        if "Sell" in str(val) or "below Sell" in str(val): 
-            return 'background-color: #DC143C; color: white'
-        return ''
-    
-    with col_h1:
-        st.caption("Buy Zone (Below Buy Price or < 5% Over)")
-        buy_zone = df_holding[df_holding["Current Market"] <= (df_holding["Buy Price"] * 1.05)].copy()
+        st.metric("Profit Horizons Reached", sell_alerts, delta=f"{sell_alerts} Active" if sell_alerts > 0 else None)
         
-        if not buy_zone.empty:
-            buy_zone["Distance"] = buy_zone["Current Market"] - buy_zone["Buy Price"]
-            buy_zone = buy_zone.sort_values(by="Distance")
-            buy_zone["Action"] = buy_zone.apply(
-                lambda x: "Buy" if x["Current Market"] <= x["Buy Price"] 
-                else f"{((x['Current Market']/x['Buy Price'])-1)*100:.1f}% above our Buy", axis=1
-            )
-            # Style the dataframe for display
-            styled_buy = buy_zone[["Ticker", "Current Market", "Buy Price", "Action"]].style.map(color_holding_rows, subset=["Action"])
-            st.dataframe(
-                styled_buy, 
-                column_config={
-                    "Current Market": st.column_config.NumberColumn("Current Market", format="$%.2f", width="small"),
-                    "Buy Price": st.column_config.NumberColumn("Buy Price", format="$%.2f", width="small"),
-                    "Action": st.column_config.TextColumn("Action", width="large")
-                },
-                use_container_width=True, hide_index=True, height=200)
-        else:
-            st.info("No Holding assets in Buy zone.")
-    
-    with col_h2:
-        st.caption("Sell Zone (Above Sell Price or Below by <5% Under)")
-        profit_zone = df_holding[df_holding["Current Market"] >= (df_holding["Sell Price"] * 0.95)].copy()
+    st.write("---")
+
+    # --- MODERNIZE SCREEN SPACE VIA TABBED INTERFACE ---
+    tab1, tab2, tab3 = st.tabs(["📊 Live Watchlist Grid", "🚨 Target Execution Zones", "📉 Portfolio Anomalies"])
+
+    with tab1:
+        st.subheader("Unified Execution Engine")
         
-        if not profit_zone.empty:
-            profit_zone["Distance"] = profit_zone["Sell Price"] - profit_zone["Current Market"]
-            profit_zone = profit_zone.sort_values(by="Distance")
-            profit_zone["Status"] = profit_zone.apply(
-                lambda x: "Sell" if x["Current Market"] >= x["Sell Price"] 
-                else f"{((1-(x['Current Market']/x['Sell Price'])))*100:.1f}% below Sell", axis=1
-            )
-            # Style the dataframe for display
-            styled_profit = profit_zone[["Ticker", "Current Market", "Sell Price", "Status"]].style.map(color_holding_rows, subset=["Status"])
-            st.dataframe(
-                styled_profit, 
-                column_config={
-                    "Current Market": st.column_config.NumberColumn("Current Market", format="$%.2f", width="small"),
-                    "Sell Price": st.column_config.NumberColumn("Sell Price", format="$%.2f", width="small"),
-                    "Status": st.column_config.TextColumn("Status", width="large")
-                },
-                use_container_width=True, hide_index=True, height=200)
-        else:
-            st.info("No Holding assets in Sell zone.")
-    st.write("---")
-    
-   # --- SPLIT FOCUS CONSOLE: WISHLIST VS TARGET ---
-    st.subheader("Market Anomalies by Portfolio Group")
+        # Inject matching string status icons natively
+        df_results_viz = df_results.copy()
+        def get_status_icon(status):
+            if "Buy" in status: return "🟢 Buy Zone"
+            if "Sell" in status: return "🔴 Sell Zone"
+            return "⚪ Hold / Monitor"
+        
+        df_results_viz["Status"] = df_results_viz["Status"].apply(get_status_icon)
 
-    # Filter dataframes for specific groups
-    df_wishlist = df_results[df_results["Group"] == "Wishlist"]
-    df_target = df_results[df_results["Group"] == "Target"]
-
-    # --- SECTION 1: WISHLIST (Side-by-Side Anomalies) ---
-    st.markdown("### Wishlist Group Standouts")
-    col_w1, col_w2 = st.columns(2)
-    
-    with col_w1:
-        st.caption("Declines of 25%+ (90 Days)")
-        wish_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_wishlist["Ticker"])]
-        if not wish_macro.empty:
-            st.dataframe(wish_macro.style.format({"Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "90-Day Decline": "{:+.2f}%"}), use_container_width=True, hide_index=True, height=200)
-        else:
-            st.info("No Wishlist assets meet criteria.")
-
-    with col_w2:
-        st.caption("Weekly Declines (Worse than -10%)")
-        wish_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_wishlist["Ticker"])]
-        if not wish_weekly.empty:
-            st.dataframe(wish_weekly.style.format({"Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "Weekly Change %": "{:+.2f}%"}), use_container_width=True, hide_index=True, height=200)
-        else:
-            st.info("No Wishlist assets meet criteria.")
-
-    st.write("---")
-
-    # --- SECTION 2: TARGET (Side-by-Side Anomalies) ---
-    st.markdown("### Target Group Standouts")
-    col_t1, col_t2 = st.columns(2)
-    
-    with col_t1:
-        st.caption("Declines of 25%+ (90 Days)")
-        target_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_target["Ticker"])]
-        if not target_macro.empty:
-            st.dataframe(target_macro.style.format({"Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "90-Day Decline": "{:+.2f}%"}), use_container_width=True, hide_index=True, height=200)
-        else:
-            st.info("No Target assets meet criteria.")
-
-    with col_t2:
-        st.caption("Weekly Declines (Worse than -10%)")
-        target_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_target["Ticker"])]
-        if not target_weekly.empty:
-            st.dataframe(target_weekly.style.format({"Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "Weekly Change %": "{:+.2f}%"}), use_container_width=True, hide_index=True, height=200)
-        else:
-            st.info("No Target assets meet criteria.")
-    
-# --- MAIN WATCHLIST GRID: SORTABLE, EDITABLE, & VISUAL ---
-    st.subheader("📊 Live Watchlist Execution Grid")
-    
-    # Add status icons directly to the data so they are sortable
-    df_results_viz = df_results.copy()
-    def get_status_icon(status):
-        if status == "Buy": return "🟢 Buy"
-        if status == "Profit Zone": return "🔵 Sell"
-        return "⚪ Hold"
-    
-    df_results_viz["Status"] = df_results_viz["Status"].apply(get_status_icon)
-
-    response_editor = st.data_editor(
-        df_results_viz,
-        column_config={
-            "Ticker": st.column_config.TextColumn("Ticker", disabled=True, width="small"), 
-            "Group": st.column_config.SelectboxColumn("Group (Edit)", options=["Target", "Holding", "Wishlist"], required=True, width="medium"),
-            "Buy Price": st.column_config.NumberColumn("Buy Price (Edit)", min_value=0.0, format="$%.2f", width="medium"),
-            "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f", width="medium"),
-            "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f", width="medium"),
-            "Status": st.column_config.TextColumn("Status", disabled=True, width="medium"),
-            "Days Below Buy Target": st.column_config.NumberColumn("Streak", disabled=True, format="%d days", width="small"),
-            "Last Updated": st.column_config.TextColumn("Last Updated")
-        },
-        use_container_width=True, 
-        hide_index=False, 
-        num_rows="dynamic", 
-        key="unified_portfolio_editor"
-    )
-    
-    # Grid Synchronizer SQL Writer Logic
-    grid_state = st.session_state.unified_portfolio_editor
-    has_changed = False
-    
-    if grid_state.get("deleted_rows"):
-        deleted_tickers = df_results.iloc[grid_state["deleted_rows"]]['Ticker'].tolist()
-        try:
-            with conn.session as session:
-                for tk in deleted_tickers:
-                    # Enforce double quotes around "Ticker"
-                    session.execute(text('DELETE FROM watchlist WHERE "Ticker" = :tk;'), {"tk": tk})
-                session.commit()
-            has_changed = True
-        except Exception as e:
-            st.error(f"Write back rejected by remote server: {e}")
-            
-    elif grid_state.get("edited_rows"):
-        try:
-            with conn.session as session:
-                for str_idx, changes in grid_state["edited_rows"].items():
-                    idx = int(str_idx)
-                    if idx < len(df_results):
-                        target_ticker = df_results.at[idx, 'Ticker']
-                        
-                        # Enforce exact database column name casing in the UPDATE blocks
-                        if "Buy Price" in changes:
-                            session.execute(text('UPDATE watchlist SET "Buy Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Buy Price"]), "tk": target_ticker})
-                        if "Sell Price" in changes:
-                            session.execute(text('UPDATE watchlist SET "Sell Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Sell Price"]), "tk": target_ticker})
-                        if "Last Updated" in changes:
-                            session.execute(text('UPDATE watchlist SET "Last Updated" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Last Updated"]).strip(), "tk": target_ticker})
-                        if "Group" in changes:
-                            session.execute(text('UPDATE watchlist SET "Group" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Group"]).strip(), "tk": target_ticker})
-                session.commit()
-            has_changed = True
-        except Exception as e:
-            st.error(f"Data mutation execution failed on remote server: {e}")
+        response_editor = st.data_editor(
+            df_results_viz,
+            column_config={
+                "Ticker": st.column_config.TextColumn("Ticker", disabled=True, width="small"), 
+                "Group": st.column_config.SelectboxColumn("Group (Edit)", options=["Target", "Holding", "Wishlist"], required=True, width="medium"),
+                "Buy Price": st.column_config.NumberColumn("Buy Price (Edit)", min_value=0.0, format="$%.2f", width="medium"),
+                "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f", width="medium"),
+                "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f", width="medium"),
+                "Status": st.column_config.TextColumn("System Status", disabled=True, width="medium"),
+                "Days Below Buy Target": st.column_config.NumberColumn("Streak", disabled=True, format="%d Days 🔥", width="small"),
+                "Last Updated": st.column_config.TextColumn("Last Sync Date")
+            },
+            use_container_width=True, 
+            hide_index=True, 
+            num_rows="dynamic", 
+            key="unified_portfolio_editor"
+        )
+        
+        # Grid Synchronizer Logic
+        grid_state = st.session_state.unified_portfolio_editor
+        has_changed = False
+        
+        if grid_state.get("deleted_rows"):
+            deleted_tickers = df_results.iloc[grid_state["deleted_rows"]]['Ticker'].tolist()
+            try:
+                with conn.session as session:
+                    for tk in deleted_tickers:
+                        session.execute(text('DELETE FROM watchlist WHERE "Ticker" = :tk;'), {"tk": tk})
+                    session.commit()
+                has_changed = True
+            except Exception as e:
+                st.error(f"Write-back failure: {e}")
                 
-    if has_changed:
-        st.rerun()
+        elif grid_state.get("edited_rows"):
+            try:
+                with conn.session as session:
+                    for str_idx, changes in grid_state["edited_rows"].items():
+                        idx = int(str_idx)
+                        if idx < len(df_results):
+                            target_ticker = df_results.at[idx, 'Ticker']
+                            
+                            if "Buy Price" in changes:
+                                session.execute(text('UPDATE watchlist SET "Buy Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Buy Price"]), "tk": target_ticker})
+                            if "Sell Price" in changes:
+                                session.execute(text('UPDATE watchlist SET "Sell Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Sell Price"]), "tk": target_ticker})
+                            if "Last Updated" in changes:
+                                session.execute(text('UPDATE watchlist SET "Last Updated" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Last Updated"]).strip(), "tk": target_ticker})
+                            if "Group" in changes:
+                                session.execute(text('UPDATE watchlist SET "Group" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Group"]).strip(), "tk": target_ticker})
+                session.commit()
+                has_changed = True
+            except Exception as e:
+                st.error(f"Data mutation execution failed: {e}")
+                    
+        if has_changed:
+            st.rerun()
+
+    with tab2:
+        st.subheader("Core Execution Allocations")
+        df_holding = df_results[df_results["Group"] == "Holding"].copy()
+        col_h1, col_h2 = st.columns(2)
+        
+        with col_h1:
+            st.markdown("#### 🍏 Buy Zone Allocation")
+            buy_zone = df_holding[df_holding["Current Market"] <= (df_holding["Buy Price"] * 1.05)].copy()
+            
+            if not buy_zone.empty:
+                buy_zone["Distance"] = buy_zone["Current Market"] - buy_zone["Buy Price"]
+                buy_zone = buy_zone.sort_values(by="Distance")
+                buy_zone["Action"] = buy_zone.apply(
+                    lambda x: "🎯 Triggering Buy" if x["Current Market"] <= x["Buy Price"] 
+                    else f"⚠️ {((x['Current Market']/x['Buy Price'])-1)*100:.1f}% Above Target", axis=1
+                )
+                
+                st.dataframe(
+                    buy_zone[["Ticker", "Current Market", "Buy Price", "Action"]], 
+                    column_config={
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Action": st.column_config.TextColumn("Signal Context")
+                    },
+                    use_container_width=True, hide_index=True, height=250
+                )
+            else:
+                st.info("No corporate holdings currently occupying the Entry Value Matrix.")
+        
+        with col_h2:
+            st.markdown("#### 🍒 Profit Horizon Allocation")
+            profit_zone = df_holding[df_holding["Current Market"] >= (df_holding["Sell Price"] * 0.95)].copy()
+            
+            if not profit_zone.empty:
+                profit_zone["Distance"] = profit_zone["Sell Price"] - profit_zone["Current Market"]
+                profit_zone = profit_zone.sort_values(by="Distance")
+                profit_zone["Status"] = profit_zone.apply(
+                    lambda x: "💰 Target Profit Met" if x["Current Market"] >= x["Sell Price"] 
+                    else f"⏳ {((1-(x['Current Market']/x['Sell Price'])))*100:.1f}% Below Target", axis=1
+                )
+                
+                st.dataframe(
+                    profit_zone[["Ticker", "Current Market", "Sell Price", "Status"]], 
+                    column_config={
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "Sell Price": st.column_config.NumberColumn("Target Profit", format="$%.2f"),
+                        "Status": st.column_config.TextColumn("Signal Context")
+                    },
+                    use_container_width=True, hide_index=True, height=250
+                )
+            else:
+                st.info("No corporate holdings currently occupying the Liquidation Horizon Matrix.")
+
+    with tab3:
+        st.subheader("Extreme Variance Trackers")
+        
+        df_wishlist = df_results[df_results["Group"] == "Wishlist"]
+        df_target = df_results[df_results["Group"] == "Target"]
+
+        col_w1, col_w2 = st.columns(2)
+        
+        with col_w1:
+            st.markdown("#### 📋 Wishlist Standouts")
+            wish_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
+            if not wish_macro.empty:
+                st.caption("Macro Real Estate Drops (90-Day Drop ≥ 25%)")
+                st.dataframe(
+                    wish_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline"]],
+                    column_config={
+                        "Buy Price": st.column_config.NumberColumn(format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn(format="$%.2f"),
+                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%")
+                    },
+                    use_container_width=True, hide_index=True, height=180
+                )
+            
+            wish_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
+            if not wish_weekly.empty:
+                st.caption("High Velocity Selloffs (Weekly Change ≤ -10%)")
+                st.dataframe(
+                    wish_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %"]],
+                    column_config={
+                        "Buy Price": st.column_config.NumberColumn(format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn(format="$%.2f"),
+                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%")
+                    },
+                    use_container_width=True, hide_index=True, height=180
+                )
+            if wish_macro.empty and wish_weekly.empty:
+                st.info("Zero anomalous downside volume shifts identified inside Wishlist assets.")
+
+        with col_w2:
+            st.markdown("#### 🎯 Target Standouts")
+            target_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
+            if not target_macro.empty:
+                st.caption("Macro Real Estate Drops (90-Day Drop ≥ 25%)")
+                st.dataframe(
+                    target_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline"]],
+                    column_config={
+                        "Buy Price": st.column_config.NumberColumn(format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn(format="$%.2f"),
+                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%")
+                    },
+                    use_container_width=True, hide_index=True, height=180
+                )
+                
+            target_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
+            if not target_weekly.empty:
+                st.caption("High Velocity Selloffs (Weekly Change ≤ -10%)")
+                st.dataframe(
+                    target_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %"]],
+                    column_config={
+                        "Buy Price": st.column_config.NumberColumn(format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn(format="$%.2f"),
+                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%")
+                    },
+                    use_container_width=True, hide_index=True, height=180
+                )
+            if target_macro.empty and target_weekly.empty:
+                st.info("Zero anomalous downside volume shifts identified inside active Core Target assets.")
 else:
-    st.info("💡 App database is currently empty. Use the Supabase dashboard or the sidebar form panel to seed tickers.")
+    st.info("💡 App database is currently empty. Populate items through the sidebar to initialize your dashboards.")
