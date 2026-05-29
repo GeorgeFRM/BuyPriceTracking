@@ -238,55 +238,45 @@ if not raw_portfolio_df.empty:
     st.write("---")
 
 # --- SECTION 0: HOLDING (Side-by-Side Execution Zones) ---
-    st.markdown("### Holding Group At or Near Targets")
-    df_holding = df_results[df_results["Group"] == "Holding"].copy()
-    col_h1, col_h2 = st.columns(2)
+st.markdown("### Holding Group At or Near Targets")
+df_holding = df_results[df_results["Group"] == "Holding"].copy()
+col_h1, col_h2 = st.columns(2)
 
-# Helper to style the Holding tables
-    def color_holding_rows(val):
-        # Forest Green for Buy zone
-        if "Buy" in str(val): return 'background-color: #228B22; color: white'
-        # Red for Sell zone
-        if "Sell" in str(val): return 'background-color: #DC143C; color: white'
-        return ''
-    
-    with col_h1:
-        st.caption("Buy Zone (Below Buy Price or < 5% Over)")
-        buy_zone = df_holding[df_holding["Current Market"] <= (df_holding["Buy Price"] * 1.05)].copy()
-        
-        # Calculate distance to Buy for sorting (Negative = better/more urgent)
-        buy_zone["Distance"] = buy_zone["Current Market"] - buy_zone["Buy Price"]
-        buy_zone = buy_zone.sort_values(by="Distance")
-        
-        buy_zone["Action"] = buy_zone.apply(
-            lambda x: "Buy" if x["Current Market"] <= x["Buy Price"] 
-            else f"{((x['Current Market']/x['Buy Price'])-1)*100:.1f}% above our Buy", axis=1
-        )
-        if not buy_zone.empty:
-            # Set height to 200px and hide unnecessary index
-            st.dataframe(buy_zone[["Ticker", "Current Market", "Buy Price", "Action"]], 
-                         use_container_width=True, hide_index=True, height=200)
-        else:
-            st.info("No Holding assets in Buy zone.")
+def color_holding_rows(val):
+    if "Buy" in str(val) or "above our Buy" in str(val): return 'background-color: #228B22; color: white'
+    if "Sell" in str(val) or "below Sell" in str(val): return 'background-color: #DC143C; color: white'
+    return ''
 
-    with col_h2:
-        st.caption("Sell Zone (Above Sell Price or Below by <5% Under)")
-        profit_zone = df_holding[df_holding["Current Market"] >= (df_holding["Sell Price"] * 0.95)].copy()
-        
-        # Calculate distance to Sell for sorting (Closer to/Over Sell = more urgent)
-        profit_zone["Distance"] = profit_zone["Sell Price"] - profit_zone["Current Market"]
-        profit_zone = profit_zone.sort_values(by="Distance")
-        
-        profit_zone["Status"] = profit_zone.apply(
-            lambda x: "Sell" if x["Current Market"] >= x["Sell Price"] 
-            else f"{((1-(x['Current Market']/x['Sell Price'])))*100:.1f}% below Sell", axis=1
-        )
-        if not profit_zone.empty:
-            st.dataframe(profit_zone[["Ticker", "Current Market", "Sell Price", "Status"]], 
-                         use_container_width=True, hide_index=True, height=200)
-        else:
-            st.info("No Holding assets in Sell zone.")
-    st.write("---")
+with col_h1:
+    st.caption("🔍 Buy Zone (Below Buy Price or < 5% Over)")
+    buy_zone = df_holding[df_holding["Current Market"] <= (df_holding["Buy Price"] * 1.05)].copy()
+    buy_zone["Distance"] = buy_zone["Current Market"] - buy_zone["Buy Price"]
+    buy_zone = buy_zone.sort_values(by="Distance")
+    buy_zone["Action"] = buy_zone.apply(
+        lambda x: "Buy" if x["Current Market"] <= x["Buy Price"] 
+        else f"{((x['Current Market']/x['Buy Price'])-1)*100:.1f}% above our Buy", axis=1
+    )
+    if not buy_zone.empty:
+        styled_buy = buy_zone[["Ticker", "Current Market", "Buy Price", "Action"]].style.map(color_holding_rows, subset=["Action"])
+        st.dataframe(styled_buy, use_container_width=True, hide_index=True, height=200)
+    else:
+        st.info("No Holding assets in Buy zone.")
+
+with col_h2:
+    st.caption("💰 Sell Zone (Above Sell Price or Below by <5% Under)")
+    profit_zone = df_holding[df_holding["Current Market"] >= (df_holding["Sell Price"] * 0.95)].copy()
+    profit_zone["Distance"] = profit_zone["Sell Price"] - profit_zone["Current Market"]
+    profit_zone = profit_zone.sort_values(by="Distance")
+    profit_zone["Status"] = profit_zone.apply(
+        lambda x: "Sell" if x["Current Market"] >= x["Sell Price"] 
+        else f"{((1-(x['Current Market']/x['Sell Price'])))*100:.1f}% below Sell", axis=1
+    )
+    if not profit_zone.empty:
+        styled_profit = profit_zone[["Ticker", "Current Market", "Sell Price", "Status"]].style.map(color_holding_rows, subset=["Status"])
+        st.dataframe(styled_profit, use_container_width=True, hide_index=True, height=200)
+    else:
+        st.info("No Holding assets in Sell zone.")
+st.write("---")
     
    # --- SPLIT FOCUS CONSOLE: WISHLIST VS TARGET ---
     st.subheader("Market Anomalies by Portfolio Group")
