@@ -17,7 +17,7 @@ st.markdown("Dynamic execution platform. Sandbox environment powered by a Cloud 
 # --- NEW: PRODUCTION-GRADE SQL ENGINE CONNECTION ---
 # Leverages Streamlit's native relational SQL driver (Zero local machine footprint)
 try:
-    conn = st.connection("supabase_db", type="sql")
+    conn = st.connection("supabase_db", type="sql", driver="psycopg2")
 except Exception as e:
     st.error(f"Critical System Fault: Unable to bind secure cloud data pipeline. Verify secrets. {e}")
     st.stop()
