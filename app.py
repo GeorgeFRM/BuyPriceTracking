@@ -258,11 +258,13 @@ if not raw_portfolio_df.empty:
                 )
                 
                 st.dataframe(
-                    buy_zone[["Ticker", "Current Market", "Buy Price", "Action"]], 
+                    buy_zone[["Ticker", "Current Market", "Buy Price", "Action", "Last Updated"]], 
                     column_config={
-                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
-                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
-                        "Action": st.column_config.TextColumn("Signal Context")
+                        "Ticker": st.column_config.TextColumn(width="small"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
+                        "Action": st.column_config.TextColumn("Signal Context"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
                     },
                     use_container_width=True, 
                     hide_index=True, 
@@ -284,11 +286,13 @@ if not raw_portfolio_df.empty:
                 )
                 
                 st.dataframe(
-                    profit_zone[["Ticker", "Current Market", "Sell Price", "Status"]], 
+                    profit_zone[["Ticker", "Current Market", "Sell Price", "Status", "Last Updated"]], 
                     column_config={
-                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
-                        "Sell Price": st.column_config.NumberColumn("Target Profit", format="$%.2f"),
-                        "Status": st.column_config.TextColumn("Signal Context")
+                        "Ticker": st.column_config.TextColumn(width="small"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
+                        "Sell Price": st.column_config.NumberColumn("Target Profit", format="$%.2f", width="small"),
+                        "Status": st.column_config.TextColumn("Signal Context"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
                     },
                     use_container_width=True, 
                     hide_index=True, 
@@ -312,11 +316,13 @@ if not raw_portfolio_df.empty:
             if not wish_macro.empty:
                 st.caption("Macro Real Estate Drops (90-Day Drop >= 25%)")
                 st.dataframe(
-                    wish_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline"]],
+                    wish_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"]],
                     column_config={
-                        "Buy Price": st.column_config.NumberColumn(format="$%.2f"),
-                        "Current Market": st.column_config.NumberColumn(format="$%.2f"),
-                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%")
+                        "Ticker": st.column_config.TextColumn(width="small"),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
+                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
                     },
                     use_container_width=True, hide_index=True, height=get_table_height(wish_macro, max_height=200)
                 )
@@ -325,11 +331,13 @@ if not raw_portfolio_df.empty:
             if not wish_weekly.empty:
                 st.caption("High Velocity Selloffs (Weekly Change <= -10%)")
                 st.dataframe(
-                    wish_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %"]],
+                    wish_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
                     column_config={
-                        "Buy Price": st.column_config.NumberColumn(format="$%.2f"),
-                        "Current Market": st.column_config.NumberColumn(format="$%.2f"),
-                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%")
+                        "Ticker": st.column_config.TextColumn(width="small"),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
+                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
                     },
                     use_container_width=True, hide_index=True, height=get_table_height(wish_weekly, max_height=200)
                 )
@@ -342,11 +350,13 @@ if not raw_portfolio_df.empty:
             if not target_macro.empty:
                 st.caption("Macro Real Estate Drops (90-Day Drop >= 25%)")
                 st.dataframe(
-                    target_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline"]],
+                    target_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"]],
                     column_config={
-                        "Buy Price": st.column_config.NumberColumn(format="$%.2f"),
-                        "Current Market": st.column_config.NumberColumn(format="$%.2f"),
-                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%")
+                        "Ticker": st.column_config.TextColumn(width="small"),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
+                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
                     },
                     use_container_width=True, hide_index=True, height=get_table_height(target_macro, max_height=200)
                 )
@@ -355,11 +365,13 @@ if not raw_portfolio_df.empty:
             if not target_weekly.empty:
                 st.caption("High Velocity Selloffs (Weekly Change <= -10%)")
                 st.dataframe(
-                    target_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %"]],
+                    target_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
                     column_config={
-                        "Buy Price": st.column_config.NumberColumn(format="$%.2f"),
-                        "Current Market": st.column_config.NumberColumn(format="$%.2f"),
-                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%")
+                        "Ticker": st.column_config.TextColumn(width="small"),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
+                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
                     },
                     use_container_width=True, hide_index=True, height=get_table_height(target_weekly, max_height=200)
                 )
@@ -381,7 +393,7 @@ if not raw_portfolio_df.empty:
         with col_sort1:
             sort_selection = st.selectbox(
                 "Sort Table By Column:",
-                options=["Streak", "Ticker", "Group", "Buy Price", "Current Market", "Sell Price", "Status", "Last Sync Date"],
+                options=["Streak", "Ticker", "Group", "Buy Price", "Current Market", "Sell Price", "Status", "Last Updated"],
                 index=0
             )
         with col_sort2:
@@ -395,7 +407,7 @@ if not raw_portfolio_df.empty:
             "Current Market": "Current Market",
             "Sell Price": "Sell Price",
             "Status": "Status",
-            "Last Sync Date": "Last Updated"
+            "Last Updated": "Last Updated"
         }
         
         df_results_viz = df_results_viz.sort_values(
@@ -409,12 +421,12 @@ if not raw_portfolio_df.empty:
             column_config={
                 "Ticker": st.column_config.TextColumn("Ticker", disabled=True, width="small"), 
                 "Group": st.column_config.SelectboxColumn("Group (Edit)", options=["Target", "Holding", "Wishlist"], required=True, width="medium"),
-                "Buy Price": st.column_config.NumberColumn("Buy Price (Edit)", min_value=0.0, format="$%.2f", width="medium"),
-                "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f", width="medium"),
-                "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f", width="medium"),
+                "Buy Price": st.column_config.NumberColumn("Buy Price (Edit)", min_value=0.0, format="$%.2f", width="small"),
+                "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f", width="small"),
+                "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f", width="small"),
                 "Status": st.column_config.TextColumn("System Status", disabled=True, width="medium"),
                 "Days Below Buy Target": st.column_config.NumberColumn("Streak", disabled=True, format="%d Days", width="small"),
-                "Last Updated": st.column_config.TextColumn("Last Sync Date")
+                "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
             },
             use_container_width=True, 
             hide_index=True, 
