@@ -12,8 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📈 Stock Target Monitor & Execution Dashboard")
-st.markdown("Dynamic execution platform. Powered by a Cloud PostgreSQL Database Connection layer.")
+st.title("Watchlist Tracker")
 
 # --- PRODUCTION-GRADE SQL ENGINE CONNECTION ---
 try:
