@@ -26,7 +26,7 @@ def fetch_watchlist_from_db():
     """Queries the centralized SQL database for tracked assets."""
     try:
         # Pull core metrics including the customized Group field mapping
-        df = conn.query('SELECT ticker, buy_price AS "Buy Price", sell_price AS "Sell Price", last_updated AS "Last Updated", "group" AS "Group" FROM watchlist;', ttl=0)
+        df = conn.query('SELECT "Ticker", "Buy Price", "Sell Price", "Last Updated", "Group" FROM watchlist;', ttl=0)
         if df is not None and not df.empty:
             df["Ticker"] = df["Ticker"].astype(str).str.upper()
             df["Buy Price"] = df["Buy Price"].astype(float)
