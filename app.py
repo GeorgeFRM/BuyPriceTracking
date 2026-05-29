@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import datetime
+import re
 
 # Set up clean page configuration
 st.set_page_config(
@@ -11,15 +12,38 @@ st.set_page_config(
 )
 
 st.title("📈 Stock Target Monitor & Execution Dashboard")
-st.markdown("Dynamic execution platform. Manage assets via the unified grid, sidebar utilities, or initial Excel seeding.")
+st.markdown("Dynamic execution platform. Sandbox environment powered by a Cloud PostgreSQL Database Connection layer.")
+
+# --- NEW: PRODUCTION-GRADE SQL ENGINE CONNECTION ---
+# Leverages Streamlit's native relational SQL driver (Zero local machine footprint)
+try:
+    conn = st.connection("supabase_db", type="sql")
+except Exception as e:
+    st.error(f"Critical System Fault: Unable to bind secure cloud data pipeline. Verify secrets. {e}")
+    st.stop()
+
+def fetch_watchlist_from_db():
+    """Queries the centralized SQL database for tracked assets."""
+    try:
+        df = conn.query("SELECT ticker, buy_price AS \"Buy Price\", sell_price AS \"Sell Price\", last_updated AS \"Last Updated\" FROM watchlist;", ttl=0)
+        if df is not None and not df.empty:
+            df["Ticker"] = df["Ticker"].astype(str).str.upper()
+            df["Buy Price"] = df["Buy Price"].astype(float)
+            df["Sell Price"] = df["Sell Price"].astype(float)
+            df["Last Updated"] = df["Last Updated"].fillna("").astype(str)
+            return df
+    except Exception as e:
+        st.error(f"Database Read Fault: {e}")
+    return pd.DataFrame(columns=["Ticker", "Buy Price", "Sell Price", "Last Updated"])
 
 # --- SESSION STATE INITIALIZATION ---
-if 'raw_portfolio' not in st.session_state:
-    st.session_state.raw_portfolio = None
 if 'market_cache' not in st.session_state:
     st.session_state.market_cache = {}
 if 'cache_timestamp' not in st.session_state:
     st.session_state.cache_timestamp = None
+
+# Pull fresh core dataframe straight from the network SQL layer
+raw_portfolio_df = fetch_watchlist_from_db()
 
 # --- SIDEBAR: USER INTERACTION PANEL ---
 with st.sidebar:
@@ -30,37 +54,47 @@ with st.sidebar:
         new_ticker = st.text_input("Ticker Symbol (e.g., AAPL)").strip().upper()
         new_buy = st.number_input("Buy Target Price ($)", min_value=0.0, step=0.01, format="%.2f")
         new_sell = st.number_input("Sell Profit Price ($)", min_value=0.0, step=0.01, format="%.2f")
-        new_updated = st.text_input("Last Updated (yyyy/mm/dd)", placeholder="2026/05/28")
+        new_updated = st.text_input("Last Updated (yyyy/mm/dd)", placeholder="2026/05/29")
         submit_button = st.form_submit_button("Add to Watchlist")
         
         if submit_button:
-            if not new_ticker or new_buy <= 0 or new_sell <= 0:
-                st.error("Please enter a valid ticker symbol and prices greater than $0.00.")
+            if not new_ticker or not re.match(r'^[A-Z0-9\.\-=]{1,10}$', new_ticker) or new_buy <= 0 or new_sell <= 0:
+                st.error("Invalid Input Data: Ensure ticker follows standard asset naming constraints.")
             else:
-                new_row = pd.DataFrame([{
-                    "Ticker": new_ticker, "Buy Price": float(new_buy),
-                    "Sell Price": float(new_sell), "Last Updated": str(new_updated).strip()
-                }])
-                if st.session_state.raw_portfolio is not None:
-                    st.session_state.raw_portfolio = st.session_state.raw_portfolio[st.session_state.raw_portfolio['Ticker'] != new_ticker]
-                    st.session_state.raw_portfolio = pd.concat([st.session_state.raw_portfolio, new_row], ignore_index=True)
-                else:
-                    st.session_state.raw_portfolio = new_row
-                
-                st.session_state.cache_timestamp = None
-                st.success(f"Added {new_ticker} successfully!")
-                st.rerun()
+                clean_date = re.sub(r'[^0-9/:-]', '', new_updated).strip()
+                try:
+                    with conn.session as session:
+                        # SQL UPSERT: Inserts new asset or updates pricing if ticker exists
+                        session.execute(
+                            """
+                            INSERT INTO watchlist (ticker, buy_price, sell_price, last_updated) 
+                            VALUES (:tk, :buy, :sell, :dt)
+                            ON CONFLICT (ticker) 
+                            DO UPDATE SET buy_price = EXCLUDED.buy_price, sell_price = EXCLUDED.sell_price, last_updated = EXCLUDED.last_updated;
+                            """,
+                            {"tk": new_ticker, "buy": float(new_buy), "sell": float(new_sell), "dt": clean_date}
+                        )
+                        session.commit()
+                    st.success(f"Added/Updated {new_ticker} successfully inside Cloud Database!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Write aborted by cloud security rules: {e}")
 
     st.write("---")
     st.header("⚙️ Settings & System")
-    st.caption("To delete a stock: Select the checkbox next to the ticker in the main grid and press 'Delete' on your keyboard, or use the trash icon.")
     
-    if st.button("🗑️ Clear Entire Portfolio Database", use_container_width=True):
-        st.session_state.raw_portfolio = None
-        st.session_state.market_cache = {}
-        st.session_state.cache_timestamp = None
-        st.cache_data.clear()
-        st.rerun()
+    if st.button("🗑️ Clear Entire Database Portfolio", use_container_width=True):
+        try:
+            with conn.session as session:
+                session.execute("TRUNCATE TABLE watchlist;")
+                session.commit()
+            st.session_state.market_cache = {}
+            st.session_state.cache_timestamp = None
+            st.cache_data.clear()
+            st.success("Cloud database successfully cleared!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Flush sequence denied: {e}")
         
     if st.button("🔄 Force Refresh Market Data", use_container_width=True):
         st.session_state.cache_timestamp = None
@@ -68,8 +102,8 @@ with st.sidebar:
         st.rerun()
 
 # --- ONE-TIME EXCEL INITIALIZATION SEED ---
-if st.session_state.raw_portfolio is None:
-    uploaded_file = st.file_uploader("Drag and drop your asset watchlist Excel file here to initialize data", type=["xlsx"], key="excel_uploader")
+if raw_portfolio_df.empty:
+    uploaded_file = st.file_uploader("Drag and drop your 600+ asset watchlist Excel file here to initialize database tables", type=["xlsx"], key="excel_uploader")
 
     if uploaded_file is not None:
         try:
@@ -80,22 +114,30 @@ if st.session_state.raw_portfolio is None:
             if not all(col in raw_df.columns for col in required_cols):
                 st.error(f"Mapping Error: Spreadsheet must contain these exact columns: {required_cols}")
             else:
-                initial_data = []
-                for _, row in raw_df.iterrows():
-                    dt = row['Last Updated']
-                    formatted_date = dt.strftime("%Y/%m/%d") if pd.notna(dt) and hasattr(dt, 'strftime') else str(dt).strip() if pd.notna(dt) else ""
-                    initial_data.append({
-                        "Ticker": str(row['Ticker']).strip().upper(),
-                        "Buy Price": float(row['Buy Price']),
-                        "Sell Price": float(row['Sell Price']),
-                        "Last Updated": formatted_date
-                    })
-                st.session_state.raw_portfolio = pd.DataFrame(initial_data)
-                st.session_state.cache_timestamp = None 
-                st.success("Watchlist database successfully initialized from Excel!")
+                with conn.session as session:
+                    # Clear any hanging records before bulk execution
+                    session.execute("TRUNCATE TABLE watchlist;")
+                    
+                    for _, row in raw_df.iterrows():
+                        dt = row['Last Updated']
+                        formatted_date = dt.strftime("%Y/%m/%d") if pd.notna(dt) and hasattr(dt, 'strftime') else str(dt).strip() if pd.notna(dt) else ""
+                        clean_tick = str(row['Ticker']).strip().upper()
+                        
+                        if re.match(r'^[A-Z0-9\.\-=]{1,10}$', clean_tick):
+                            session.execute(
+                                "INSERT INTO watchlist (ticker, buy_price, sell_price, last_updated) VALUES (:tk, :buy, :sell, :dt);",
+                                {
+                                    "tk": clean_tick, 
+                                    "buy": float(row['Buy Price']), 
+                                    "sell": float(row['Sell Price']), 
+                                    "dt": re.sub(r'[^0-9/:-]', '', formatted_date).strip()
+                                }
+                            )
+                    session.commit()
+                st.success("Cloud Database successfully populated from spreadsheet parsing array!")
                 st.rerun()
         except Exception as e:
-            st.error(f"Error parsing uploaded file: {e}")
+            st.error(f"Error compiling Excel matrix into database statements: {e}")
 
 # --- HIGH-SPEED SAFE BATCH DOWNLOADER ---
 @st.cache_data(ttl=86400)
@@ -136,10 +178,10 @@ def fetch_daily_market_snapshots(tickers_tuple):
     return market_snapshots
 
 # --- APPLICATION LOGIC ---
-if st.session_state.raw_portfolio is not None:
-    active_tickers = tuple(st.session_state.raw_portfolio['Ticker'].unique())
+if not raw_portfolio_df.empty:
+    active_tickers = tuple(raw_portfolio_df['Ticker'].unique())
     
-    # Check Level-2 Memory Caching layer (8 hours / 28,800 seconds)
+    # Check Level-2 Memory Caching layer (8 hours)
     now = datetime.datetime.now()
     if (st.session_state.cache_timestamp and 
         (now - st.session_state.cache_timestamp).total_seconds() < 28800 and 
@@ -153,14 +195,13 @@ if st.session_state.raw_portfolio is not None:
     processed_data, top_drops_data, macro_drops_data = [], [], []
     buy_alerts, sell_alerts = 0, 0
     
-    for _, row in st.session_state.raw_portfolio.iterrows():
+    for _, row in raw_portfolio_df.iterrows():
         ticker, buy_target, sell_target, last_updated = row['Ticker'], row['Buy Price'], row['Sell Price'], row['Last Updated']
         
         if ticker in daily_data and daily_data[ticker]:
             current_price = daily_data[ticker]["current_price"]
             closes_backward = daily_data[ticker]["historical_closes"]
             
-            # FIXED: Safe division guards against zero or invalid historical baseline prices
             p_1w = daily_data[ticker]["price_1w_ago"]
             p_90d = daily_data[ticker]["price_90d_ago"]
             
@@ -278,25 +319,40 @@ if st.session_state.raw_portfolio is not None:
         use_container_width=True, hide_index=False, num_rows="dynamic", key="unified_portfolio_editor"
     )
     
-    # Grid Synchronizer Logic
+    # Grid Synchronizer SQL Writer Logic
     grid_state = st.session_state.unified_portfolio_editor
     has_changed = False
     
     if grid_state.get("deleted_rows"):
         deleted_tickers = df_results.iloc[grid_state["deleted_rows"]]['Ticker'].tolist()
-        st.session_state.raw_portfolio = st.session_state.raw_portfolio[
-            ~st.session_state.raw_portfolio['Ticker'].isin(deleted_tickers)
-        ].reset_index(drop=True)
-        has_changed = True
+        try:
+            with conn.session as session:
+                for tk in deleted_tickers:
+                    session.execute("DELETE FROM watchlist WHERE ticker = :tk;", {"tk": tk})
+                session.commit()
+            has_changed = True
+        except Exception as e:
+            st.error(f"Write back rejected by remote server: {e}")
+            
     elif grid_state.get("edited_rows"):
-        for str_idx, changes in grid_state["edited_rows"].items():
-            idx = int(str_idx)
-            if idx < len(df_results):
-                target_ticker = df_results.at[idx, 'Ticker']
-                master_idx = st.session_state.raw_portfolio[st.session_state.raw_portfolio['Ticker'] == target_ticker].index[0]
-                for col, val in changes.items():
-                    st.session_state.raw_portfolio.at[master_idx, col] = float(val) if "Price" in col else str(val).strip()
-                has_changed = True
+        try:
+            with conn.session as session:
+                for str_idx, changes in grid_state["edited_rows"].items():
+                    idx = int(str_idx)
+                    if idx < len(df_results):
+                        target_ticker = df_results.at[idx, 'Ticker']
+                        
+                        # Map out edits dynamically and parse down parameterized UPDATE queries
+                        if "Buy Price" in changes:
+                            session.execute("UPDATE watchlist SET buy_price = :val WHERE ticker = :tk;", {"val": float(changes["Buy Price"]), "tk": target_ticker})
+                        if "Sell Price" in changes:
+                            session.execute("UPDATE watchlist SET sell_price = :val WHERE ticker = :tk;", {"val": float(changes["Sell Price"]), "tk": target_ticker})
+                        if "Last Updated" in changes:
+                            session.execute("UPDATE watchlist SET last_updated = :val WHERE ticker = :tk;", {"val": str(changes["Last Updated"]).strip(), "tk": target_ticker})
+                session.commit()
+            has_changed = True
+        except Exception as e:
+            st.error(f"Data mutation execution failed on remote server: {e}")
                 
     if has_changed:
         st.rerun()
