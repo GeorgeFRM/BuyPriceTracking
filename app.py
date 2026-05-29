@@ -238,12 +238,12 @@ if not raw_portfolio_df.empty:
     st.write("---")
 
 # --- SECTION 0: HOLDING (Side-by-Side Execution Zones) ---
-    st.markdown("### 💼 Holding Group Execution Zones")
+    st.markdown("### Holding Group At or Near Targets")
     df_holding = df_results[df_results["Group"] == "Holding"].copy()
     col_h1, col_h2 = st.columns(2)
 
     with col_h1:
-        st.caption("🔍 Buy Zone (Below Buy Price or < 5% Over)")
+        st.caption("Buy Zone (Below Buy Price or < 5% Over)")
         buy_zone = df_holding[df_holding["Current Market"] <= (df_holding["Buy Price"] * 1.05)].copy()
         
         # Calculate distance to Buy for sorting (Negative = better/more urgent)
@@ -262,7 +262,7 @@ if not raw_portfolio_df.empty:
             st.info("No Holding assets in Buy zone.")
 
     with col_h2:
-        st.caption("💰 Profit Zone (Within 5% of Sell Price or Over)")
+        st.caption("Sell Zone (Above Sell Price or Below by <5% Under)")
         profit_zone = df_holding[df_holding["Current Market"] >= (df_holding["Sell Price"] * 0.95)].copy()
         
         # Calculate distance to Sell for sorting (Closer to/Over Sell = more urgent)
@@ -277,7 +277,7 @@ if not raw_portfolio_df.empty:
             st.dataframe(profit_zone[["Ticker", "Current Market", "Sell Price", "Status"]], 
                          use_container_width=True, hide_index=True, height=200)
         else:
-            st.info("No Holding assets in Profit zone.")
+            st.info("No Holding assets in Sell zone.")
     st.write("---")
     
    # --- SPLIT FOCUS CONSOLE: WISHLIST VS TARGET ---
