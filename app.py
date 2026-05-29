@@ -237,27 +237,54 @@ if not raw_portfolio_df.empty:
         st.metric("Profit Horizons Reached", sell_alerts)
     st.write("---")
     
-    # --- TABULAR FOCUS CONSOLE ---
-    st.subheader("📉 Structural Market Drawdown Anomalies")
-    tab1, tab2 = st.tabs(["⚠️ Declines of 25% or More (Trailing 90 Days)", "⏱️ Top Weekly Declines (Worse than -10%)"])
+   # --- SPLIT FOCUS CONSOLE: WISHLIST VS TARGET ---
+    st.subheader("Market Anomalies by Portfolio Group")
+
+    # Filter dataframes for specific groups
+    df_wishlist = df_results[df_results["Group"] == "Wishlist"]
+    df_target = df_results[df_results["Group"] == "Target"]
+
+    # --- SECTION 1: WISHLIST (Side-by-Side Anomalies) ---
+    st.markdown("### Wishlist Group Standouts")
+    col_w1, col_w2 = st.columns(2)
     
-    with tab1:
-        if not df_top_90d_drops.empty:
-            st.dataframe(df_top_90d_drops.style.format({
-                "Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "90-Day Decline": "{:+.2f}%"
-            }), use_container_width=True, hide_index=True, height=280)
+    with col_w1:
+        st.caption("Declines of 25%+ (90 Days)")
+        wish_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_wishlist["Ticker"])]
+        if not wish_macro.empty:
+            st.dataframe(wish_macro.style.format({"Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "90-Day Decline": "{:+.2f}%"}), use_container_width=True, hide_index=True, height=200)
         else:
-            st.info("No tracking assets have declined by 25% or more over the trailing 90 days.")
-            
-    with tab2:
-        if not df_top_10_drops.empty:
-            st.dataframe(df_top_10_drops.style.format({
-                "Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "Weekly Change %": "{:+.2f}%"
-            }), use_container_width=True, hide_index=True, height=280)
+            st.info("No Wishlist assets meet criteria.")
+
+    with col_w2:
+        st.caption("Weekly Declines (Worse than -10%)")
+        wish_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_wishlist["Ticker"])]
+        if not wish_weekly.empty:
+            st.dataframe(wish_weekly.style.format({"Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "Weekly Change %": "{:+.2f}%"}), use_container_width=True, hide_index=True, height=200)
         else:
-            st.info("No tracking assets have declined by more than 10% over the trailing week.")
+            st.info("No Wishlist assets meet criteria.")
 
     st.write("---")
+
+    # --- SECTION 2: TARGET (Side-by-Side Anomalies) ---
+    st.markdown("### Target Group Standouts")
+    col_t1, col_t2 = st.columns(2)
+    
+    with col_t1:
+        st.caption("Declines of 25%+ (90 Days)")
+        target_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_target["Ticker"])]
+        if not target_macro.empty:
+            st.dataframe(target_macro.style.format({"Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "90-Day Decline": "{:+.2f}%"}), use_container_width=True, hide_index=True, height=200)
+        else:
+            st.info("No Target assets meet criteria.")
+
+    with col_t2:
+        st.caption("Weekly Declines (Worse than -10%)")
+        target_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_target["Ticker"])]
+        if not target_weekly.empty:
+            st.dataframe(target_weekly.style.format({"Buy Price": "${:,.2f}", "Current Market": "${:,.2f}", "Weekly Change %": "{:+.2f}%"}), use_container_width=True, hide_index=True, height=200)
+        else:
+            st.info("No Target assets meet criteria.")
     
     # --- MAIN WATCHLIST GRID WITH CONDITIONAL COLOR MATRIX ---
     def style_matrix_rows(row):
