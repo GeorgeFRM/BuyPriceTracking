@@ -186,7 +186,7 @@ if not raw_portfolio_df.empty:
                     else: break
                 days_display = int(days_below)
             elif current_price >= sell_target:
-                status, days_display = "Profit Zone", None
+                status, days_display = "Sell Zone", None
                 sell_alerts += 1
             else:
                 status, days_display = "Hold / Monitor", None
