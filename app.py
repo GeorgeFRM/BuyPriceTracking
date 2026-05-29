@@ -17,7 +17,7 @@ st.title("📈 Watchlist Tracker")
 # --- DATABASE CONNECTION ---
 try:
     conn = st.connection("supabase_db", type="sql", driver="psycopg2")
- Dad exception as e:
+except Exception as e:
     st.error(f"Database Connection Error: Verify your secrets config. Details: {e}")
     st.stop()
 
@@ -35,6 +35,14 @@ def fetch_watchlist_from_db():
     except Exception as e:
         st.error(f"Database Read Error: {e}")
     return pd.DataFrame(columns=["Ticker", "Buy Price", "Sell Price", "Last Updated", "Group"])
+
+def get_table_height(df, max_height=400):
+    """Dynamically calculates table height to eliminate unnecessary scrolling for short datasets."""
+    if df.empty:
+        return 100
+    # Allocates ~35px per row plus 40px for headers/padding
+    calculated_height = (len(df) * 35) + 45
+    return min(calculated_height, max_height)
 
 # --- SESSION STATE INITIALIZATION ---
 if 'market_cache' not in st.session_state:
@@ -55,7 +63,6 @@ with st.sidebar:
         new_buy = st.number_input("Buy Target Price ($)", min_value=0.0, step=0.01, format="%.2f")
         new_sell = st.number_input("Sell Profit Price ($)", min_value=0.0, step=0.01, format="%.2f")
         
-        # Native date picker UI replacing brittle text/regex formatting
         new_updated_date = st.date_input("Last Updated", datetime.date.today())
         new_group = st.selectbox("Strategic Group Category", ["Target", "Holding", "Wishlist"])
         
@@ -68,7 +75,6 @@ with st.sidebar:
                 clean_date = new_updated_date.strftime("%Y/%m/%d")
                 try:
                     with conn.session as session:
-                        # Fixed critical bug: Standardized column identifier names matching your SELECT schema
                         session.execute(
                             text("""
                             INSERT INTO watchlist ("Ticker", "Buy Price", "Sell Price", "Last Updated", "Group") 
@@ -87,7 +93,7 @@ with st.sidebar:
     st.write("---")
     st.header("⚙️ System Control")
     
-    if st.button("🗑️ Clear Entire Portfolio", use_container_width=True, type="secondary"):
+    if st.button("Clear Entire Portfolio", use_container_width=True, type="secondary"):
         try:
             with conn.session as session:
                 session.execute(text("DELETE FROM watchlist;"))
@@ -100,12 +106,12 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Flush sequence denied: {e}")
         
-    if st.button("🔄 Force Refresh Market Data", use_container_width=True, type="primary"):
+    if st.button("Force Refresh Market Data", use_container_width=True, type="primary"):
         st.session_state.cache_timestamp = None
         st.cache_data.clear()
         st.rerun()
 
-# --- MARKET snaps DATA DOWNLOADER ---
+# --- MARKET DATA DOWNLOADER ---
 @st.cache_data(ttl=86400)
 def fetch_daily_market_snapshots(tickers_tuple):
     market_snapshots = {}
@@ -147,7 +153,6 @@ def fetch_daily_market_snapshots(tickers_tuple):
 if not raw_portfolio_df.empty:
     active_tickers = tuple(raw_portfolio_df['Ticker'].unique())
     
-    # 8-Hour Session Memory layer
     now = datetime.datetime.now()
     if (st.session_state.cache_timestamp and 
         (now - st.session_state.cache_timestamp).total_seconds() < 28800 and 
@@ -214,7 +219,6 @@ if not raw_portfolio_df.empty:
             df_results['Days Below Buy Target'].fillna(-1).sort_values(ascending=False).index
         ].reset_index(drop=True)
         
-    # Standardized fallback DataFrames
     df_top_10_drops = pd.DataFrame(top_drops_data) if top_drops_data else pd.DataFrame()
     if not df_top_10_drops.empty:
         df_top_10_drops = df_top_10_drops[df_top_10_drops['Weekly Change %'] <= -10.0].sort_values(by="Weekly Change %").head(10)
@@ -234,20 +238,19 @@ if not raw_portfolio_df.empty:
         
     st.write("---")
 
-    # --- MODERNIZE SCREEN SPACE VIA TABBED INTERFACE ---
+    # --- TABBED INTERFACE ---
     tab1, tab2, tab3 = st.tabs(["📊 Live Watchlist Grid", "🚨 Target Execution Zones", "📉 Portfolio Anomalies"])
 
     with tab1:
         st.subheader("Unified Execution Engine")
         
-        # Inject matching string status icons natively
         df_results_viz = df_results.copy()
-        def get_status_icon(status):
-            if "Buy" in status: return "🟢 Buy Zone"
-            if "Sell" in status: return "🔴 Sell Zone"
-            return "⚪ Hold / Monitor"
+        def get_clean_status(status):
+            if "Buy" in status: return "Buy Zone"
+            if "Sell" in status: return "Sell Zone"
+            return "Hold / Monitor"
         
-        df_results_viz["Status"] = df_results_viz["Status"].apply(get_status_icon)
+        df_results_viz["Status"] = df_results_viz["Status"].apply(get_clean_status)
 
         response_editor = st.data_editor(
             df_results_viz,
@@ -258,12 +261,13 @@ if not raw_portfolio_df.empty:
                 "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f", width="medium"),
                 "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f", width="medium"),
                 "Status": st.column_config.TextColumn("System Status", disabled=True, width="medium"),
-                "Days Below Buy Target": st.column_config.NumberColumn("Streak", disabled=True, format="%d Days 🔥", width="small"),
+                "Days Below Buy Target": st.column_config.NumberColumn("Streak", disabled=True, format="%d Days", width="small"),
                 "Last Updated": st.column_config.TextColumn("Last Sync Date")
             },
             use_container_width=True, 
             hide_index=True, 
             num_rows="dynamic", 
+            height=get_table_height(df_results_viz, max_height=500),
             key="unified_portfolio_editor"
         )
         
@@ -312,15 +316,15 @@ if not raw_portfolio_df.empty:
         col_h1, col_h2 = st.columns(2)
         
         with col_h1:
-            st.markdown("#### 🍏 Buy Zone Allocation")
+            st.markdown("#### Buy Zone Allocation")
             buy_zone = df_holding[df_holding["Current Market"] <= (df_holding["Buy Price"] * 1.05)].copy()
             
             if not buy_zone.empty:
                 buy_zone["Distance"] = buy_zone["Current Market"] - buy_zone["Buy Price"]
                 buy_zone = buy_zone.sort_values(by="Distance")
                 buy_zone["Action"] = buy_zone.apply(
-                    lambda x: "🎯 Triggering Buy" if x["Current Market"] <= x["Buy Price"] 
-                    else f"⚠️ {((x['Current Market']/x['Buy Price'])-1)*100:.1f}% Above Target", axis=1
+                    lambda x: "Triggering Buy" if x["Current Market"] <= x["Buy Price"] 
+                    else f"{((x['Current Market']/x['Buy Price'])-1)*100:.1f}% Above Target", axis=1
                 )
                 
                 st.dataframe(
@@ -330,21 +334,23 @@ if not raw_portfolio_df.empty:
                         "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
                         "Action": st.column_config.TextColumn("Signal Context")
                     },
-                    use_container_width=True, hide_index=True, height=250
+                    use_container_width=True, 
+                    hide_index=True, 
+                    height=get_table_height(buy_zone, max_height=350)
                 )
             else:
                 st.info("No corporate holdings currently occupying the Entry Value Matrix.")
         
         with col_h2:
-            st.markdown("#### 🍒 Profit Horizon Allocation")
+            st.markdown("#### Profit Horizon Allocation")
             profit_zone = df_holding[df_holding["Current Market"] >= (df_holding["Sell Price"] * 0.95)].copy()
             
             if not profit_zone.empty:
                 profit_zone["Distance"] = profit_zone["Sell Price"] - profit_zone["Current Market"]
                 profit_zone = profit_zone.sort_values(by="Distance")
                 profit_zone["Status"] = profit_zone.apply(
-                    lambda x: "💰 Target Profit Met" if x["Current Market"] >= x["Sell Price"] 
-                    else f"⏳ {((1-(x['Current Market']/x['Sell Price'])))*100:.1f}% Below Target", axis=1
+                    lambda x: "Target Profit Met" if x["Current Market"] >= x["Sell Price"] 
+                    else f"{((1-(x['Current Market']/x['Sell Price'])))*100:.1f}% Below Target", axis=1
                 )
                 
                 st.dataframe(
@@ -354,7 +360,9 @@ if not raw_portfolio_df.empty:
                         "Sell Price": st.column_config.NumberColumn("Target Profit", format="$%.2f"),
                         "Status": st.column_config.TextColumn("Signal Context")
                     },
-                    use_container_width=True, hide_index=True, height=250
+                    use_container_width=True, 
+                    hide_index=True, 
+                    height=get_table_height(profit_zone, max_height=350)
                 )
             else:
                 st.info("No corporate holdings currently occupying the Liquidation Horizon Matrix.")
@@ -368,10 +376,10 @@ if not raw_portfolio_df.empty:
         col_w1, col_w2 = st.columns(2)
         
         with col_w1:
-            st.markdown("#### 📋 Wishlist Standouts")
+            st.markdown("#### Wishlist Standouts")
             wish_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
             if not wish_macro.empty:
-                st.caption("Macro Real Estate Drops (90-Day Drop ≥ 25%)")
+                st.caption("Macro Real Estate Drops (90-Day Drop >= 25%)")
                 st.dataframe(
                     wish_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline"]],
                     column_config={
@@ -379,12 +387,12 @@ if not raw_portfolio_df.empty:
                         "Current Market": st.column_config.NumberColumn(format="$%.2f"),
                         "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%")
                     },
-                    use_container_width=True, hide_index=True, height=180
+                    use_container_width=True, hide_index=True, height=get_table_height(wish_macro, max_height=200)
                 )
             
             wish_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
             if not wish_weekly.empty:
-                st.caption("High Velocity Selloffs (Weekly Change ≤ -10%)")
+                st.caption("High Velocity Selloffs (Weekly Change <= -10%)")
                 st.dataframe(
                     wish_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %"]],
                     column_config={
@@ -392,16 +400,16 @@ if not raw_portfolio_df.empty:
                         "Current Market": st.column_config.NumberColumn(format="$%.2f"),
                         "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%")
                     },
-                    use_container_width=True, hide_index=True, height=180
+                    use_container_width=True, hide_index=True, height=get_table_height(wish_weekly, max_height=200)
                 )
             if wish_macro.empty and wish_weekly.empty:
                 st.info("Zero anomalous downside volume shifts identified inside Wishlist assets.")
 
         with col_w2:
-            st.markdown("#### 🎯 Target Standouts")
+            st.markdown("#### Target Standouts")
             target_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
             if not target_macro.empty:
-                st.caption("Macro Real Estate Drops (90-Day Drop ≥ 25%)")
+                st.caption("Macro Real Estate Drops (90-Day Drop >= 25%)")
                 st.dataframe(
                     target_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline"]],
                     column_config={
@@ -409,12 +417,12 @@ if not raw_portfolio_df.empty:
                         "Current Market": st.column_config.NumberColumn(format="$%.2f"),
                         "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%")
                     },
-                    use_container_width=True, hide_index=True, height=180
+                    use_container_width=True, hide_index=True, height=get_table_height(target_macro, max_height=200)
                 )
                 
             target_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
             if not target_weekly.empty:
-                st.caption("High Velocity Selloffs (Weekly Change ≤ -10%)")
+                st.caption("High Velocity Selloffs (Weekly Change <= -10%)")
                 st.dataframe(
                     target_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %"]],
                     column_config={
@@ -422,9 +430,9 @@ if not raw_portfolio_df.empty:
                         "Current Market": st.column_config.NumberColumn(format="$%.2f"),
                         "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%")
                     },
-                    use_container_width=True, hide_index=True, height=180
+                    use_container_width=True, hide_index=True, height=get_table_height(target_weekly, max_height=200)
                 )
             if target_macro.empty and target_weekly.empty:
                 st.info("Zero anomalous downside volume shifts identified inside active Core Target assets.")
 else:
-    st.info("💡 App database is currently empty. Populate items through the sidebar to initialize your dashboards.")
+    st.info("App database is currently empty. Populate items through the sidebar to initialize your dashboards.")
