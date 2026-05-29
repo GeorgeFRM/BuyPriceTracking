@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import datetime
 import re
+from sqlalchemy import text
 
 # Set up clean page configuration
 st.set_page_config(
