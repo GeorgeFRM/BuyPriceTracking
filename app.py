@@ -251,7 +251,7 @@ if not raw_portfolio_df.empty:
         return ''
     
     with col_h1:
-        st.caption("🔍 Buy Zone (Below Buy Price or < 5% Over)")
+        st.caption("Buy Zone (Below Buy Price or < 5% Over)")
         buy_zone = df_holding[df_holding["Current Market"] <= (df_holding["Buy Price"] * 1.05)].copy()
         
         if not buy_zone.empty:
@@ -263,12 +263,19 @@ if not raw_portfolio_df.empty:
             )
             # Style the dataframe for display
             styled_buy = buy_zone[["Ticker", "Current Market", "Buy Price", "Action"]].style.map(color_holding_rows, subset=["Action"])
-            st.dataframe(styled_buy, use_container_width=True, hide_index=True, height=200)
+            st.dataframe(
+                styled_buy, 
+                column_config={
+                    "Current Market": st.column_config.NumberColumn("Current Market", format="$%.2f", width="small"),
+                    "Buy Price": st.column_config.NumberColumn("Buy Price", format="$%.2f", width="small"),
+                    "Action": st.column_config.TextColumn("Action", width="large")
+                },
+                use_container_width=True, hide_index=True, height=200)
         else:
             st.info("No Holding assets in Buy zone.")
     
     with col_h2:
-        st.caption("💰 Sell Zone (Above Sell Price or Below by <5% Under)")
+        st.caption("Sell Zone (Above Sell Price or Below by <5% Under)")
         profit_zone = df_holding[df_holding["Current Market"] >= (df_holding["Sell Price"] * 0.95)].copy()
         
         if not profit_zone.empty:
@@ -280,7 +287,14 @@ if not raw_portfolio_df.empty:
             )
             # Style the dataframe for display
             styled_profit = profit_zone[["Ticker", "Current Market", "Sell Price", "Status"]].style.map(color_holding_rows, subset=["Status"])
-            st.dataframe(styled_profit, use_container_width=True, hide_index=True, height=200)
+            st.dataframe(
+                styled_profit, 
+                column_config={
+                    "Current Market": st.column_config.NumberColumn("Current Market", format="$%.2f", width="small"),
+                    "Sell Price": st.column_config.NumberColumn("Sell Price", format="$%.2f", width="small"),
+                    "Status": st.column_config.TextColumn("Status", width="large")
+                },
+                use_container_width=True, hide_index=True, height=200)
         else:
             st.info("No Holding assets in Sell zone.")
     st.write("---")
