@@ -237,7 +237,7 @@ if not raw_portfolio_df.empty:
             buy_zone = df_holding[df_holding["Current Market"] <= (df_holding["Buy Price"] * 1.05)].copy()
             
             if not buy_zone.empty:
-                buy_zone["Distance"] = buy_zone["Current Market"] - buy_zone["Buy Price"]
+                buy_zone["Distance"] = (buy_zone["Current Market"]/buy_zone["Buy Price"]-1)*100
                 buy_zone = buy_zone.sort_values(by="Distance")
                 buy_zone["Action"] = buy_zone.apply(
                     lambda x: "Below Buy Price" if x["Current Market"] <= x["Buy Price"] 
