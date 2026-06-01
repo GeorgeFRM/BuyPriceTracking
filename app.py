@@ -299,7 +299,7 @@ if not raw_portfolio_df.empty:
         
         with col_w1:
             st.markdown("#### Wishlist Standouts")
-            wish_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
+            wish_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
             if not wish_weekly.empty:
                 st.caption("Recent Significant Declines (Weekly Change <= -10%)")
                 st.dataframe(
@@ -326,7 +326,7 @@ if not raw_portfolio_df.empty:
                     },
                     use_container_width=True, hide_index=True, height=get_table_height(wish_macro, max_height=200)
                 )
-            wish_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
+            wish_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
             if wish_macro.empty and wish_weekly.empty:
                 st.info("Zero anomalous downside volume shifts identified inside Wishlist assets.")
 
