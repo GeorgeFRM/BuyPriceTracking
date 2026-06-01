@@ -332,7 +332,8 @@ if not raw_portfolio_df.empty:
 
         with col_w2:
             st.markdown("#### Target List Standouts")
-            target_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
+            
+            target_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
             if not target_weekly.empty:
                 st.caption("Recent Significant Decline (Weekly Change <= -10%)")
                 st.dataframe(
@@ -346,6 +347,7 @@ if not raw_portfolio_df.empty:
                     },
                     use_container_width=True, hide_index=True, height=get_table_height(target_weekly, max_height=200)
                 )
+            target_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
             if not target_macro.empty:
                 st.caption("More Sustained Weakness (90-Day Drop >= 25%)")
                 st.dataframe(
@@ -359,8 +361,6 @@ if not raw_portfolio_df.empty:
                     },
                     use_container_width=True, hide_index=True, height=get_table_height(target_macro, max_height=200)
                 )
-                
-            target_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
             if target_macro.empty and target_weekly.empty:
                 st.info("Zero anomalous downside volume shifts identified inside active Core Target assets.")
 
