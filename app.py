@@ -366,7 +366,7 @@ if not raw_portfolio_df.empty:
 
     # --- TAB 3: COMPLETE WATCHLIST ---
     with tab3:
-        st.subheader("Unified Execution Engine")
+        st.subheader("Full Watchlist")
         
         df_results_viz = df_results.copy()
         def get_clean_status(status):
