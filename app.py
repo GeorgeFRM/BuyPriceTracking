@@ -290,7 +290,7 @@ if not raw_portfolio_df.empty:
 
     # --- TAB 2: TARGET / WISHLIST ALERTS ---
     with tab2:
-        st.subheader("Extreme Variance Trackers")
+        st.subheader("Significant Stock Moves")
         
         df_wishlist = df_results[df_results["Group"] == "Wishlist"]
         df_target = df_results[df_results["Group"] == "Target"]
@@ -300,23 +300,8 @@ if not raw_portfolio_df.empty:
         with col_w1:
             st.markdown("#### Wishlist Standouts")
             wish_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
-            if not wish_macro.empty:
-                st.caption("Macro Real Estate Drops (90-Day Drop >= 25%)")
-                st.dataframe(
-                    wish_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"]],
-                    column_config={
-                        "Ticker": st.column_config.TextColumn(width="small"),
-                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
-                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
-                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%"),
-                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
-                    },
-                    use_container_width=True, hide_index=True, height=get_table_height(wish_macro, max_height=200)
-                )
-            
-            wish_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
-            if not wish_weekly.empty:
-                st.caption("High Velocity Selloffs (Weekly Change <= -10%)")
+             if not wish_weekly.empty:
+                st.caption("Recent Significant Declines (Weekly Change <= -10%)")
                 st.dataframe(
                     wish_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
                     column_config={
@@ -328,14 +313,41 @@ if not raw_portfolio_df.empty:
                     },
                     use_container_width=True, hide_index=True, height=get_table_height(wish_weekly, max_height=200)
                 )
+            if not wish_macro.empty:
+                st.caption("More sustained Weakness (90-Day Drop >= 25%)")
+                st.dataframe(
+                    wish_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"]],
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(width="small"),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
+                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
+                    },
+                    use_container_width=True, hide_index=True, height=get_table_height(wish_macro, max_height=200)
+                )
+            wish_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
             if wish_macro.empty and wish_weekly.empty:
                 st.info("Zero anomalous downside volume shifts identified inside Wishlist assets.")
 
         with col_w2:
-            st.markdown("#### Target Standouts")
+            st.markdown("#### Target List Standouts")
             target_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
+            if not target_weekly.empty:
+                st.caption("Recent Significant Decline (Weekly Change <= -10%)")
+                st.dataframe(
+                    target_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(width="small"),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
+                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
+                    },
+                    use_container_width=True, hide_index=True, height=get_table_height(target_weekly, max_height=200)
+                )
             if not target_macro.empty:
-                st.caption("Macro Real Estate Drops (90-Day Drop >= 25%)")
+                st.caption("More Sustained Weakness (90-Day Drop >= 25%)")
                 st.dataframe(
                     target_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"]],
                     column_config={
@@ -349,19 +361,6 @@ if not raw_portfolio_df.empty:
                 )
                 
             target_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
-            if not target_weekly.empty:
-                st.caption("High Velocity Selloffs (Weekly Change <= -10%)")
-                st.dataframe(
-                    target_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
-                    column_config={
-                        "Ticker": st.column_config.TextColumn(width="small"),
-                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
-                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
-                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%"),
-                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
-                    },
-                    use_container_width=True, hide_index=True, height=get_table_height(target_weekly, max_height=200)
-                )
             if target_macro.empty and target_weekly.empty:
                 st.info("Zero anomalous downside volume shifts identified inside active Core Target assets.")
 
