@@ -89,19 +89,6 @@ with st.sidebar:
     st.write("---")
     st.header("⚙️ System Control")
     
-    if st.button("Clear Entire Portfolio", use_container_width=True, type="secondary"):
-        try:
-            with conn.session as session:
-                session.execute(text("DELETE FROM watchlist;"))
-                session.commit()
-            st.session_state.market_cache = {}
-            st.session_state.cache_timestamp = None
-            st.cache_data.clear()
-            st.success("Watchlist database cleared!")
-            st.rerun()
-        except Exception as e:
-            st.error(f"Flush sequence denied: {e}")
-        
     if st.button("Force Refresh Market Data", use_container_width=True, type="primary"):
         st.session_state.cache_timestamp = None
         st.cache_data.clear()
@@ -241,19 +228,19 @@ if not raw_portfolio_df.empty:
 
     # --- TAB 1: PORTFOLIO ALERTS ---
     with tab1:
-        st.subheader("Core Execution Allocations")
+        st.subheader("Buy and Sell Alerts")
         df_holding = df_results[df_results["Group"] == "Holding"].copy()
         col_h1, col_h2 = st.columns(2)
         
         with col_h1:
-            st.markdown("#### Buy Zone Allocation")
+            st.markdown("#### Attractive Buys")
             buy_zone = df_holding[df_holding["Current Market"] <= (df_holding["Buy Price"] * 1.05)].copy()
             
             if not buy_zone.empty:
                 buy_zone["Distance"] = buy_zone["Current Market"] - buy_zone["Buy Price"]
                 buy_zone = buy_zone.sort_values(by="Distance")
                 buy_zone["Action"] = buy_zone.apply(
-                    lambda x: "Triggering Buy" if x["Current Market"] <= x["Buy Price"] 
+                    lambda x: "Below Buy Price" if x["Current Market"] <= x["Buy Price"] 
                     else f"{((x['Current Market']/x['Buy Price'])-1)*100:.1f}% Above Target", axis=1
                 )
                 
@@ -262,7 +249,7 @@ if not raw_portfolio_df.empty:
                     column_config={
                         "Ticker": st.column_config.TextColumn(width="small"),
                         "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
-                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
+                        "Buy Price": st.column_config.NumberColumn("Buy Price", format="$%.2f", width="small"),
                         "Action": st.column_config.TextColumn("Signal Context"),
                         "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
                     },
@@ -274,7 +261,7 @@ if not raw_portfolio_df.empty:
                 st.info("No corporate holdings currently occupying the Entry Value Matrix.")
         
         with col_h2:
-            st.markdown("#### Profit Horizon Allocation")
+            st.markdown("#### Sell Price Reached")
             profit_zone = df_holding[df_holding["Current Market"] >= (df_holding["Sell Price"] * 0.95)].copy()
             
             if not profit_zone.empty:
