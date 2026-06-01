@@ -327,7 +327,7 @@ if not raw_portfolio_df.empty:
                     },
                     use_container_width=True, hide_index=True, height=get_table_height(wish_macro, max_height=200)
                 )
-                        if wish_macro.empty and wish_weekly.empty:
+            if wish_macro.empty and wish_weekly.empty:
                 st.info("Zero anomalous downside volume shifts identified inside Wishlist assets.")
 
         with col_w2:
