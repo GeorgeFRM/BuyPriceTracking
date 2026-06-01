@@ -215,7 +215,7 @@ if not raw_portfolio_df.empty:
     # --- KPI HEADER RIBBON ---
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Total Assets Tracked", len(df_results))
+        st.metric("Total Companies Tracked", len(df_results))
     with col2:
         st.metric("Buy Targets Triggered", buy_alerts, delta=f"{buy_alerts} Active" if buy_alerts > 0 else None, delta_color="inverse")
     with col3:
