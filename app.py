@@ -265,10 +265,10 @@ if not raw_portfolio_df.empty:
             profit_zone = df_holding[df_holding["Current Market"] >= (df_holding["Sell Price"] * 0.95)].copy()
             
             if not profit_zone.empty:
-                profit_zone["Distance"] = profit_zone["Sell Price"] - profit_zone["Current Market"]
+                profit_zone["Distance"] = (profit_zone["Sell Price"]/profit_zone["Current Market"]-1)*100
                 profit_zone = profit_zone.sort_values(by="Distance")
                 profit_zone["Status"] = profit_zone.apply(
-                    lambda x: "Target Profit Met" if x["Current Market"] >= x["Sell Price"] 
+                    lambda x: "Above Sell Price" if x["Current Market"] >= x["Sell Price"] 
                     else f"{((1-(x['Current Market']/x['Sell Price'])))*100:.1f}% Below Target", axis=1
                 )
                 
