@@ -313,6 +313,7 @@ if not raw_portfolio_df.empty:
                     },
                     use_container_width=True, hide_index=True, height=get_table_height(wish_weekly, max_height=200)
                 )
+            wish_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
             if not wish_macro.empty:
                 st.caption("More sustained Weakness (90-Day Drop >= 25%)")
                 st.dataframe(
@@ -326,8 +327,7 @@ if not raw_portfolio_df.empty:
                     },
                     use_container_width=True, hide_index=True, height=get_table_height(wish_macro, max_height=200)
                 )
-            wish_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
-            if wish_macro.empty and wish_weekly.empty:
+                        if wish_macro.empty and wish_weekly.empty:
                 st.info("Zero anomalous downside volume shifts identified inside Wishlist assets.")
 
         with col_w2:
