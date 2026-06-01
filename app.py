@@ -300,7 +300,7 @@ if not raw_portfolio_df.empty:
         with col_w1:
             st.markdown("#### Wishlist Standouts")
             wish_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
-             if not wish_weekly.empty:
+            if not wish_weekly.empty:
                 st.caption("Recent Significant Declines (Weekly Change <= -10%)")
                 st.dataframe(
                     wish_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
