@@ -400,7 +400,7 @@ if not raw_portfolio_df.empty:
             by=sort_mapping[sort_selection],
             ascending=(sort_direction == "Ascending"),
             na_position="last"
-        ).set_index("Ticker", drop=False) # Maps edits directly to the Ticker, ignoring positional shifts
+        ).reset_index(drop=True)  # FIX: Ensures clean RangeIndex layout, preventing loops
         
         response_editor = st.data_editor(
             df_results_viz,
@@ -425,12 +425,12 @@ if not raw_portfolio_df.empty:
         has_changed = False
         
         if grid_state.get("deleted_rows"):
-            deleted_tickers = df_results_viz.iloc[grid_state["deleted_rows"]]['Ticker'].tolist()
             try:
                 with conn.session as session:
-                    for tk in deleted_tickers:
-                        # Extra safety layer: Cast deleted rows to string as well
-                        session.execute(text('DELETE FROM watchlist WHERE "Ticker" = :tk;'), {"tk": str(tk)})
+                    for row_idx in grid_state["deleted_rows"]:
+                        # Look up ticker via integer position
+                        clean_tk = str(df_results_viz.iloc[row_idx]['Ticker'])
+                        session.execute(text('DELETE FROM watchlist WHERE "Ticker" = :tk;'), {"tk": clean_tk})
                     session.commit()
                 has_changed = True
             except Exception as e:
@@ -439,9 +439,10 @@ if not raw_portfolio_df.empty:
         elif grid_state.get("edited_rows"):
             try:
                 with conn.session as session:
-                    for target_ticker, changes in grid_state["edited_rows"].items():
-                        # OPTION 1 IMPLEMENTED HERE: Ensure ticker is strictly a string representation
-                        clean_tk = str(target_ticker)
+                    for row_idx_str, changes in grid_state["edited_rows"].items():
+                        # Resolve the actual underlying ticker from positional string index
+                        row_idx = int(row_idx_str)
+                        clean_tk = str(df_results_viz.iloc[row_idx]['Ticker'])
                         
                         if "Buy Price" in changes:
                             session.execute(text('UPDATE watchlist SET "Buy Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Buy Price"]), "tk": clean_tk})
