@@ -21,6 +21,44 @@ except Exception as e:
     st.error(f"Database Connection Error: Verify your secrets config. Details: {e}")
     st.stop()
 
+# --- CALLBACK FOR INSTANT UI UPDATES ---
+def save_grid_edits():
+    """Executes before the main script runs to ensure DB is updated before data fetch."""
+    if "unified_portfolio_editor" not in st.session_state or "current_editor_df" not in st.session_state:
+        return
+        
+    grid_state = st.session_state.unified_portfolio_editor
+    old_df = st.session_state.current_editor_df
+    has_changed = False
+    
+    try:
+        with conn.session as session:
+            if grid_state.get("deleted_rows"):
+                for row_idx in grid_state["deleted_rows"]:
+                    clean_tk = str(old_df.iloc[row_idx]['Ticker'])
+                    session.execute(text('DELETE FROM watchlist WHERE "Ticker" = :tk;'), {"tk": clean_tk})
+                has_changed = True
+                    
+            if grid_state.get("edited_rows"):
+                for row_idx_str, changes in grid_state["edited_rows"].items():
+                    row_idx = int(row_idx_str)
+                    clean_tk = str(old_df.iloc[row_idx]['Ticker'])
+                    
+                    if "Buy Price" in changes:
+                        session.execute(text('UPDATE watchlist SET "Buy Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Buy Price"]), "tk": clean_tk})
+                    if "Sell Price" in changes:
+                        session.execute(text('UPDATE watchlist SET "Sell Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Sell Price"]), "tk": clean_tk})
+                    if "Last Updated" in changes:
+                        session.execute(text('UPDATE watchlist SET "Last Updated" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Last Updated"]).strip(), "tk": clean_tk})
+                    if "Group" in changes:
+                        session.execute(text('UPDATE watchlist SET "Group" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Group"]).strip(), "tk": clean_tk})
+                    has_changed = True
+                    
+            if has_changed:
+                session.commit()
+    except Exception as e:
+        st.error(f"Write-back failure during grid edit: {e}")
+
 def fetch_watchlist_from_db():
     try:
         df = conn.query('SELECT "Ticker", "Buy Price", "Sell Price", "Last Updated", "Group" FROM watchlist;', ttl=0)
@@ -400,6 +438,9 @@ if not raw_portfolio_df.empty:
             na_position="last"
         ).reset_index(drop=True)
         
+        # Store current layout for the callback to reference before generating the grid
+        st.session_state.current_editor_df = df_results_viz
+        
         response_editor = st.data_editor(
             df_results_viz,
             column_config={
@@ -415,44 +456,9 @@ if not raw_portfolio_df.empty:
             hide_index=True, 
             num_rows="dynamic", 
             height=get_table_height(df_results_viz, max_height=500),
-            key="unified_portfolio_editor"
+            key="unified_portfolio_editor",
+            on_change=save_grid_edits # Database update happens here automatically
         )
-        
-        grid_state = st.session_state.unified_portfolio_editor
-        has_changed = False
-        
-        if grid_state.get("deleted_rows"):
-            try:
-                with conn.session as session:
-                    for row_idx in grid_state["deleted_rows"]:
-                        clean_tk = str(df_results_viz.iloc[row_idx]['Ticker'])
-                        session.execute(text('DELETE FROM watchlist WHERE "Ticker" = :tk;'), {"tk": clean_tk})
-                    session.commit()
-                has_changed = True
-            except Exception as e:
-                st.error(f"Write-back failure: {e}")
-                
-        elif grid_state.get("edited_rows"):
-            try:
-                with conn.session as session:
-                    for row_idx_str, changes in grid_state["edited_rows"].items():
-                        row_idx = int(row_idx_str)
-                        clean_tk = str(df_results_viz.iloc[row_idx]['Ticker'])
-                        
-                        if "Buy Price" in changes:
-                            session.execute(text('UPDATE watchlist SET "Buy Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Buy Price"]), "tk": clean_tk})
-                        if "Sell Price" in changes:
-                            session.execute(text('UPDATE watchlist SET "Sell Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Sell Price"]), "tk": clean_tk})
-                        if "Last Updated" in changes:
-                            session.execute(text('UPDATE watchlist SET "Last Updated" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Last Updated"]).strip(), "tk": clean_tk})
-                        if "Group" in changes:
-                            session.execute(text('UPDATE watchlist SET "Group" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Group"]).strip(), "tk": clean_tk})
-                session.commit()
-                has_changed = True
-            except Exception as e:
-                st.error(f"Data mutation execution failed: {e}")
-                    
-        if has_changed:
-            st.rerun()
+
 else:
     st.info("App database is currently empty. Populate items through the sidebar to initialize your dashboards.")
