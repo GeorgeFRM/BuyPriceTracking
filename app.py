@@ -247,13 +247,12 @@ if not raw_portfolio_df.empty:
                 st.dataframe(
                     buy_zone[["Ticker", "Current Market", "Buy Price", "Action", "Last Updated"]], 
                     column_config={
-                        "Ticker": st.column_config.TextColumn(width="small"),
-                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
-                        "Buy Price": st.column_config.NumberColumn("Buy Price", format="$%.2f", width="small"),
+                        "Ticker": st.column_config.TextColumn(),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "Buy Price": st.column_config.NumberColumn("Buy Price", format="$%.2f"),
                         "Action": st.column_config.TextColumn("Signal Context"),
-                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
-                    use_container_width=True, 
                     hide_index=True, 
                     height=get_table_height(buy_zone, max_height=350)
                 )
@@ -275,13 +274,12 @@ if not raw_portfolio_df.empty:
                 st.dataframe(
                     profit_zone[["Ticker", "Current Market", "Sell Price", "Status", "Last Updated"]], 
                     column_config={
-                        "Ticker": st.column_config.TextColumn(width="small"),
-                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
-                        "Sell Price": st.column_config.NumberColumn("Target Profit", format="$%.2f", width="small"),
+                        "Ticker": st.column_config.TextColumn(),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "Sell Price": st.column_config.NumberColumn("Target Profit", format="$%.2f"),
                         "Status": st.column_config.TextColumn("Signal Context"),
-                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
-                    use_container_width=True, 
                     hide_index=True, 
                     height=get_table_height(profit_zone, max_height=350)
                 )
@@ -305,13 +303,13 @@ if not raw_portfolio_df.empty:
                 st.dataframe(
                     wish_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
                     column_config={
-                        "Ticker": st.column_config.TextColumn(width="small"),
-                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
-                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
+                        "Ticker": st.column_config.TextColumn(),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
                         "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%"),
-                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
-                    use_container_width=True, hide_index=True, height=get_table_height(wish_weekly, max_height=200)
+                    hide_index=True, height=get_table_height(wish_weekly, max_height=200)
                 )
             wish_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
             if not wish_macro.empty:
@@ -319,13 +317,13 @@ if not raw_portfolio_df.empty:
                 st.dataframe(
                     wish_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"]],
                     column_config={
-                        "Ticker": st.column_config.TextColumn(width="small"),
-                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
-                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
+                        "Ticker": st.column_config.TextColumn(),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
                         "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%"),
-                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
-                    use_container_width=True, hide_index=True, height=get_table_height(wish_macro, max_height=200)
+                    hide_index=True, height=get_table_height(wish_macro, max_height=200)
                 )
             if wish_macro.empty and wish_weekly.empty:
                 st.info("Zero anomalous downside volume shifts identified inside Wishlist assets.")
@@ -339,13 +337,13 @@ if not raw_portfolio_df.empty:
                 st.dataframe(
                     target_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
                     column_config={
-                        "Ticker": st.column_config.TextColumn(width="small"),
-                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
-                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
+                        "Ticker": st.column_config.TextColumn(),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
                         "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%"),
-                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
-                    use_container_width=True, hide_index=True, height=get_table_height(target_weekly, max_height=200)
+                    hide_index=True, height=get_table_height(target_weekly, max_height=200)
                 )
             target_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
             if not target_macro.empty:
@@ -353,13 +351,13 @@ if not raw_portfolio_df.empty:
                 st.dataframe(
                     target_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"]],
                     column_config={
-                        "Ticker": st.column_config.TextColumn(width="small"),
-                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f", width="small"),
-                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f", width="small"),
+                        "Ticker": st.column_config.TextColumn(),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
                         "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%"),
-                        "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
-                    use_container_width=True, hide_index=True, height=get_table_height(target_macro, max_height=200)
+                    hide_index=True, height=get_table_height(target_macro, max_height=200)
                 )
             if target_macro.empty and target_weekly.empty:
                 st.info("Zero anomalous downside volume shifts identified inside active Core Target assets.")
@@ -400,21 +398,20 @@ if not raw_portfolio_df.empty:
             by=sort_mapping[sort_selection],
             ascending=(sort_direction == "Ascending"),
             na_position="last"
-        ).reset_index(drop=True)  # FIX: Ensures clean RangeIndex layout, preventing loops
+        ).reset_index(drop=True)
         
         response_editor = st.data_editor(
             df_results_viz,
             column_config={
-                "Ticker": st.column_config.TextColumn("Ticker", disabled=True, width="small"), 
-                "Group": st.column_config.SelectboxColumn("Group (Edit)", options=["Target", "Holding", "Wishlist"], required=True, width="medium"),
-                "Buy Price": st.column_config.NumberColumn("Buy Price (Edit)", min_value=0.0, format="$%.2f", width="small"),
-                "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f", width="small"),
-                "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f", width="small"),
-                "Status": st.column_config.TextColumn("System Status", disabled=True, width="medium"),
-                "Days Below Buy Target": st.column_config.NumberColumn("Streak", disabled=True, format="%d Days", width="small"),
-                "Last Updated": st.column_config.TextColumn("Last Updated", width="small")
+                "Ticker": st.column_config.TextColumn("Ticker", disabled=True), 
+                "Group": st.column_config.SelectboxColumn("Group (Edit)", options=["Target", "Holding", "Wishlist"], required=True),
+                "Buy Price": st.column_config.NumberColumn("Buy Price (Edit)", min_value=0.0, format="$%.2f"),
+                "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f"),
+                "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f"),
+                "Status": st.column_config.TextColumn("System Status", disabled=True),
+                "Days Below Buy Target": st.column_config.NumberColumn("Streak", disabled=True, format="%d Days"),
+                "Last Updated": st.column_config.TextColumn("Last Updated")
             },
-            use_container_width=True, 
             hide_index=True, 
             num_rows="dynamic", 
             height=get_table_height(df_results_viz, max_height=500),
@@ -428,7 +425,6 @@ if not raw_portfolio_df.empty:
             try:
                 with conn.session as session:
                     for row_idx in grid_state["deleted_rows"]:
-                        # Look up ticker via integer position
                         clean_tk = str(df_results_viz.iloc[row_idx]['Ticker'])
                         session.execute(text('DELETE FROM watchlist WHERE "Ticker" = :tk;'), {"tk": clean_tk})
                     session.commit()
@@ -440,7 +436,6 @@ if not raw_portfolio_df.empty:
             try:
                 with conn.session as session:
                     for row_idx_str, changes in grid_state["edited_rows"].items():
-                        # Resolve the actual underlying ticker from positional string index
                         row_idx = int(row_idx_str)
                         clean_tk = str(df_results_viz.iloc[row_idx]['Ticker'])
                         
