@@ -400,8 +400,8 @@ if not raw_portfolio_df.empty:
             by=sort_mapping[sort_selection],
             ascending=(sort_direction == "Ascending"),
             na_position="last"
-        ).reset_index(drop=True)
-
+        ).set_index("Ticker", drop=False) # Maps edits directly to the Ticker, ignoring positional shifts
+        
         response_editor = st.data_editor(
             df_results_viz,
             column_config={
@@ -438,19 +438,17 @@ if not raw_portfolio_df.empty:
         elif grid_state.get("edited_rows"):
             try:
                 with conn.session as session:
-                    for str_idx, changes in grid_state["edited_rows"].items():
-                        idx = int(str_idx)
-                        if idx < len(df_results_viz):
-                            target_ticker = df_results_viz.at[idx, 'Ticker']
-                            
-                            if "Buy Price" in changes:
-                                session.execute(text('UPDATE watchlist SET "Buy Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Buy Price"]), "tk": target_ticker})
-                            if "Sell Price" in changes:
-                                session.execute(text('UPDATE watchlist SET "Sell Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Sell Price"]), "tk": target_ticker})
-                            if "Last Updated" in changes:
-                                session.execute(text('UPDATE watchlist SET "Last Updated" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Last Updated"]).strip(), "tk": target_ticker})
-                            if "Group" in changes:
-                                session.execute(text('UPDATE watchlist SET "Group" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Group"]).strip(), "tk": target_ticker})
+                    # target_ticker is now natively the Ticker string (e.g., 'AAPL')
+                    for target_ticker, changes in grid_state["edited_rows"].items():
+                        
+                        if "Buy Price" in changes:
+                            session.execute(text('UPDATE watchlist SET "Buy Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Buy Price"]), "tk": target_ticker})
+                        if "Sell Price" in changes:
+                            session.execute(text('UPDATE watchlist SET "Sell Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Sell Price"]), "tk": target_ticker})
+                        if "Last Updated" in changes:
+                            session.execute(text('UPDATE watchlist SET "Last Updated" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Last Updated"]).strip(), "tk": target_ticker})
+                        if "Group" in changes:
+                            session.execute(text('UPDATE watchlist SET "Group" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Group"]).strip(), "tk": target_ticker})
                 session.commit()
                 has_changed = True
             except Exception as e:
