@@ -78,7 +78,7 @@ with st.sidebar:
                             ON CONFLICT ("Ticker") 
                             DO UPDATE SET "Buy Price" = EXCLUDED."Buy Price", "Sell Price" = EXCLUDED."Sell Price", "Last Updated" = EXCLUDED."Last Updated", "Group" = EXCLUDED."Group";
                             """),
-                            {"tk": new_ticker, "buy": float(new_buy), "sell": float(new_sell), "dt": clean_date, "gp": new_group}
+                            {"tk": str(new_ticker), "buy": float(new_buy), "sell": float(new_sell), "dt": clean_date, "gp": new_group}
                         )
                         session.commit()
                     st.success(f"Successfully processed {new_ticker}!")
@@ -429,7 +429,8 @@ if not raw_portfolio_df.empty:
             try:
                 with conn.session as session:
                     for tk in deleted_tickers:
-                        session.execute(text('DELETE FROM watchlist WHERE "Ticker" = :tk;'), {"tk": tk})
+                        # Extra safety layer: Cast deleted rows to string as well
+                        session.execute(text('DELETE FROM watchlist WHERE "Ticker" = :tk;'), {"tk": str(tk)})
                     session.commit()
                 has_changed = True
             except Exception as e:
@@ -438,17 +439,18 @@ if not raw_portfolio_df.empty:
         elif grid_state.get("edited_rows"):
             try:
                 with conn.session as session:
-                    # target_ticker is now natively the Ticker string (e.g., 'AAPL')
                     for target_ticker, changes in grid_state["edited_rows"].items():
+                        # OPTION 1 IMPLEMENTED HERE: Ensure ticker is strictly a string representation
+                        clean_tk = str(target_ticker)
                         
                         if "Buy Price" in changes:
-                            session.execute(text('UPDATE watchlist SET "Buy Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Buy Price"]), "tk": target_ticker})
+                            session.execute(text('UPDATE watchlist SET "Buy Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Buy Price"]), "tk": clean_tk})
                         if "Sell Price" in changes:
-                            session.execute(text('UPDATE watchlist SET "Sell Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Sell Price"]), "tk": target_ticker})
+                            session.execute(text('UPDATE watchlist SET "Sell Price" = :val WHERE "Ticker" = :tk;'), {"val": float(changes["Sell Price"]), "tk": clean_tk})
                         if "Last Updated" in changes:
-                            session.execute(text('UPDATE watchlist SET "Last Updated" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Last Updated"]).strip(), "tk": target_ticker})
+                            session.execute(text('UPDATE watchlist SET "Last Updated" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Last Updated"]).strip(), "tk": clean_tk})
                         if "Group" in changes:
-                            session.execute(text('UPDATE watchlist SET "Group" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Group"]).strip(), "tk": target_ticker})
+                            session.execute(text('UPDATE watchlist SET "Group" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Group"]).strip(), "tk": clean_tk})
                 session.commit()
                 has_changed = True
             except Exception as e:
