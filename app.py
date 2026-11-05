@@ -258,7 +258,7 @@ if not raw_portfolio_df.empty:
         processed_data.append({
             "Ticker": ticker, "Group": group_cat, "Buy Price": buy_target, "Current Market": current_price,
             "Sell Price": sell_target, "Status": status, "Days Below Buy Target": days_display, "Last Updated": last_updated,
-            "1M Return": monthly_perf, "90-Day Return": macro_perf, "Buy Diff %": buy_diff_pct
+            "1M Return": monthly_perf, "90-Day Return": macro_perf, "% Above Tgt Buy": buy_diff_pct
         })
         
     df_results = pd.DataFrame(processed_data)
@@ -501,7 +501,7 @@ if not raw_portfolio_df.empty:
         with col_sort1:
             sort_selection = st.selectbox(
                 "Sort Table By Column:",
-                options=["Streak", "Ticker", "Group", "Buy Price", "Current Market", "Buy Diff %", "Sell Price", "1M Return", "90-Day Return", "Status", "Last Updated"],
+                options=["Streak", "Ticker", "Group", "Buy Price", "Current Market", "% Above Tgt Buy", "Sell Price", "1M Return", "90-Day Return", "Status", "Last Updated"],
                 index=0
             )
         with col_sort2:
@@ -513,7 +513,7 @@ if not raw_portfolio_df.empty:
             "Group": "Group",
             "Buy Price": "Buy Price",
             "Current Market": "Current Market",
-            "Buy Diff %": "Buy Diff %",
+            "% Above Tgt Buy": "% Above Tgt Buy",
             "Sell Price": "Sell Price",
             "1M Return": "1M Return",
             "90-Day Return": "90-Day Return",
@@ -536,7 +536,7 @@ if not raw_portfolio_df.empty:
                 "Group": st.column_config.SelectboxColumn("Group (Edit)", options=["Target", "Holding", "Wishlist"], required=True),
                 "Buy Price": st.column_config.NumberColumn("Buy Price (Edit)", min_value=0.0, format="$%.2f"),
                 "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f"),
-                "Buy Diff %": st.column_config.NumberColumn("Buy Diff %", disabled=True, format="%.1f%%"),
+                "% Above Tgt Buy": st.column_config.NumberColumn("% Above Tgt Buy", disabled=True, format="%.1f%%"),
                 "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f"),
                 "1M Return": st.column_config.NumberColumn("1M Return", disabled=True, format="%.1f%%"),
                 "90-Day Return": st.column_config.NumberColumn("90-Day Return", disabled=True, format="%.1f%%"),
