@@ -292,3 +292,257 @@ if not raw_portfolio_df.empty:
     tab1, tab2, tab3 = st.tabs(["🚨 Portfolio Alerts", "📉 Target / Wishlist Alerts", "📊 Complete Watchlist"])
 
     # --- TAB 1: PORTFOLIO ALERTS ---
+    with tab1:
+        st.subheader("Buy and Sell Alerts")
+        df_holding = df_results[df_results["Group"] == "Holding"].copy()
+        col_h1, col_h2 = st.columns(2)
+        
+        with col_h1:
+            st.markdown("#### Attractive Buys")
+            buy_zone = df_holding[df_holding["Current Market"] <= (df_holding["Buy Price"] * 1.05)].copy()
+            
+            if not buy_zone.empty:
+                buy_zone["Distance"] = (buy_zone["Current Market"]/buy_zone["Buy Price"]-1)*100
+                buy_zone = buy_zone.sort_values(by="Distance")
+                buy_zone["Action"] = buy_zone.apply(
+                    lambda x: "Below Buy Price" if x["Current Market"] <= x["Buy Price"] 
+                    else f"{((x['Current Market']/x['Buy Price'])-1)*100:.1f}% Above Target", axis=1
+                )
+                
+                st.dataframe(
+                    buy_zone[["Ticker", "Current Market", "Buy Price", "Action", "Last Updated"]], 
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "Buy Price": st.column_config.NumberColumn("Buy Price", format="$%.2f"),
+                        "Action": st.column_config.TextColumn("Signal Context"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
+                    },
+                    hide_index=True, 
+                    height=get_table_height(buy_zone, max_height=350)
+                )
+            else:
+                st.info("No corporate holdings currently occupying the Entry Value Matrix.")
+        
+        with col_h2:
+            st.markdown("#### Sell Price Reached")
+            profit_zone = df_holding[df_holding["Current Market"] >= (df_holding["Sell Price"] * 0.95)].copy()
+            
+            if not profit_zone.empty:
+                profit_zone["Distance"] = (profit_zone["Sell Price"]/profit_zone["Current Market"]-1)*100
+                profit_zone = profit_zone.sort_values(by="Distance")
+                profit_zone["Status"] = profit_zone.apply(
+                    lambda x: "Above Sell Price" if x["Current Market"] >= x["Sell Price"] 
+                    else f"{(1 - (x['Current Market'] / x['Sell Price'])) * 100:.1f}% Below Target", axis=1
+                )
+                
+                st.dataframe(
+                    profit_zone[["Ticker", "Current Market", "Sell Price", "Status", "Last Updated"]], 
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "Sell Price": st.column_config.NumberColumn("Target Profit", format="$%.2f"),
+                        "Status": st.column_config.TextColumn("Signal Context"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
+                    },
+                    hide_index=True, 
+                    height=get_table_height(profit_zone, max_height=350)
+                )
+            else:
+                st.info("No corporate holdings currently occupying the Liquidation Horizon Matrix.")
+
+        st.write("---")
+        st.subheader("Significant Market Declines in Holdings")
+        col_d1, col_d2 = st.columns(2)
+
+        with col_d1:
+            st.markdown("#### Recent Significant Declines (Weekly Change <= -10%)")
+            holding_weekly_drops = df_top_10_drops[df_top_10_drops["Group"] == "Holding"] if not df_top_10_drops.empty else pd.DataFrame()
+            if not holding_weekly_drops.empty:
+                st.dataframe(
+                    holding_weekly_drops[["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
+                    },
+                    hide_index=True, height=get_table_height(holding_weekly_drops, max_height=250)
+                )
+            else:
+                st.info("Zero holding assets meeting weekly drop criteria (<= -10%).")
+
+        with col_d2:
+            st.markdown("#### Sustained Weakness (90-Day Drop >= 25%)")
+            holding_macro_drops = df_top_90d_drops[df_top_90d_drops["Group"] == "Holding"] if not df_top_90d_drops.empty else pd.DataFrame()
+            if not holding_macro_drops.empty:
+                st.dataframe(
+                    holding_macro_drops[["Ticker", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"]],
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
+                    },
+                    hide_index=True, height=get_table_height(holding_macro_drops, max_height=250)
+                )
+            else:
+                st.info("Zero holding assets meeting 90-day decline criteria (>= 25%).")
+
+    # --- TAB 2: TARGET / WISHLIST ALERTS ---
+    with tab2:
+        st.subheader("Significant Stock Moves")
+        
+        df_wishlist = df_results[df_results["Group"] == "Wishlist"]
+        df_target = df_results[df_results["Group"] == "Target"]
+
+        col_w1, col_w2 = st.columns(2)
+        
+        with col_w1:
+            st.markdown("#### Wishlist Standouts")
+            wish_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
+            if not wish_weekly.empty:
+                st.caption("Recent Significant Declines (Weekly Change <= -10%)")
+                st.dataframe(
+                    wish_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
+                    },
+                    hide_index=True, height=get_table_height(wish_weekly, max_height=200)
+                )
+            wish_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
+            if not wish_macro.empty:
+                st.caption("More sustained Weakness (90-Day Drop >= 25%)")
+                st.dataframe(
+                    wish_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"]],
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
+                    },
+                    hide_index=True, height=get_table_height(wish_macro, max_height=200)
+                )
+            
+            wish_buy_zone = df_results[(df_results["Group"] == "Wishlist") & (df_results["Current Market"] <= df_results["Buy Price"])].copy()
+            if not wish_buy_zone.empty:
+                st.caption("Wishlist Buy Zone (Market Price <= Buy Price)")
+                st.dataframe(
+                    wish_buy_zone[["Ticker", "Buy Price", "Current Market", "1M Return", "90-Day Return", "Days Below Buy Target", "Last Updated"]],
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "1M Return": st.column_config.NumberColumn("1M Return", format="%.2f%%"),
+                        "90-Day Return": st.column_config.NumberColumn("90-Day Return", format="%.2f%%"),
+                        "Days Below Buy Target": st.column_config.NumberColumn("Streak", format="%d Days"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
+                    },
+                    hide_index=True, height=get_table_height(wish_buy_zone, max_height=200)
+                )
+
+            if wish_macro.empty and wish_weekly.empty and wish_buy_zone.empty:
+                st.info("Zero Wishlist assets currently meeting standalone drop or buy-zone criteria.")
+
+        with col_w2:
+            st.markdown("#### Target List Standouts")
+            
+            target_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
+            if not target_weekly.empty:
+                st.caption("Recent Significant Decline (Weekly Change <= -10%)")
+                st.dataframe(
+                    target_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
+                    },
+                    hide_index=True, height=get_table_height(target_weekly, max_height=200)
+                )
+            target_macro = df_top_90d_drops[df_top_90d_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_90d_drops.empty else pd.DataFrame()
+            if not target_macro.empty:
+                st.caption("More Sustained Weakness (90-Day Drop >= 25%)")
+                st.dataframe(
+                    target_macro[["Ticker", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"]],
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
+                    },
+                    hide_index=True, height=get_table_height(target_macro, max_height=200)
+                )
+            if target_macro.empty and target_weekly.empty:
+                st.info("Zero anomalous downside volume shifts identified inside active Core Target assets.")
+
+    # --- TAB 3: COMPLETE WATCHLIST ---
+    with tab3:
+        st.subheader("Full Watchlist")
+        
+        df_results_viz = df_results.copy()
+        def get_clean_status(status):
+            if "Buy" in status: return "Buy Zone"
+            if "Sell" in status: return "Sell Zone"
+            return "Hold / Monitor"
+        df_results_viz["Status"] = df_results_viz["Status"].apply(get_clean_status)
+
+        col_sort1, col_sort2 = st.columns([2, 1])
+        with col_sort1:
+            sort_selection = st.selectbox(
+                "Sort Table By Column:",
+                options=["Streak", "Ticker", "Group", "Buy Price", "Current Market", "Sell Price", "Status", "Last Updated"],
+                index=0
+            )
+        with col_sort2:
+            sort_direction = st.radio("Order Direction:", options=["Descending", "Ascending"], horizontal=True, index=0)
+
+        sort_mapping = {
+            "Streak": "Days Below Buy Target",
+            "Ticker": "Ticker",
+            "Group": "Group",
+            "Buy Price": "Buy Price",
+            "Current Market": "Current Market",
+            "Sell Price": "Sell Price",
+            "Status": "Status",
+            "Last Updated": "Last Updated"
+        }
+        
+        df_results_viz = df_results_viz.sort_values(
+            by=sort_mapping[sort_selection],
+            ascending=(sort_direction == "Ascending"),
+            na_position="last"
+        ).reset_index(drop=True)
+        
+        st.session_state.current_editor_df = df_results_viz
+        
+        response_editor = st.data_editor(
+            df_results_viz,
+            column_config={
+                "Ticker": st.column_config.TextColumn("Ticker", disabled=True), 
+                "Group": st.column_config.SelectboxColumn("Group (Edit)", options=["Target", "Holding", "Wishlist"], required=True),
+                "Buy Price": st.column_config.NumberColumn("Buy Price (Edit)", min_value=0.0, format="$%.2f"),
+                "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f"),
+                "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f"),
+                "Status": st.column_config.TextColumn("System Status", disabled=True),
+                "Days Below Buy Target": st.column_config.NumberColumn("Streak", disabled=True, format="%d Days"),
+                "Last Updated": st.column_config.TextColumn("Last Updated")
+            },
+            hide_index=True, 
+            num_rows="dynamic", 
+            height=get_table_height(df_results_viz, max_height=500),
+            key="unified_portfolio_editor",
+            on_change=save_grid_edits
+        )
+
+else:
+    st.info("App database is currently empty. Populate items through the sidebar to initialize your dashboards.")
