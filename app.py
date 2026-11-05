@@ -33,12 +33,34 @@ def save_grid_edits():
     
     try:
         with conn.session as session:
+            # Handle Deleted Rows
             if grid_state.get("deleted_rows"):
                 for row_idx in grid_state["deleted_rows"]:
                     clean_tk = str(old_df.iloc[row_idx]['Ticker'])
                     session.execute(text('DELETE FROM watchlist WHERE "Ticker" = :tk;'), {"tk": clean_tk})
                 has_changed = True
-                    
+                
+            # Handle Added Rows directly in the grid
+            if grid_state.get("added_rows"):
+                for row in grid_state["added_rows"]:
+                    tk = str(row.get("Ticker", "")).strip().upper()
+                    if tk:
+                        buy = float(row.get("Buy Price", 0.0))
+                        sell = float(row.get("Sell Price", 0.0))
+                        dt = str(row.get("Last Updated", datetime.date.today().strftime("%Y/%m/%d")))
+                        gp = str(row.get("Group", "Wishlist"))
+                        session.execute(
+                            text("""
+                            INSERT INTO watchlist ("Ticker", "Buy Price", "Sell Price", "Last Updated", "Group") 
+                            VALUES (:tk, :buy, :sell, :dt, :gp)
+                            ON CONFLICT ("Ticker") 
+                            DO UPDATE SET "Buy Price" = EXCLUDED."Buy Price", "Sell Price" = EXCLUDED."Sell Price", "Last Updated" = EXCLUDED."Last Updated", "Group" = EXCLUDED."Group";
+                            """),
+                            {"tk": tk, "buy": buy, "sell": sell, "dt": dt, "gp": gp}
+                        )
+                has_changed = True
+
+            # Handle Edited Rows
             if grid_state.get("edited_rows"):
                 for row_idx_str, changes in grid_state["edited_rows"].items():
                     row_idx = int(row_idx_str)
@@ -52,8 +74,8 @@ def save_grid_edits():
                         session.execute(text('UPDATE watchlist SET "Last Updated" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Last Updated"]).strip(), "tk": clean_tk})
                     if "Group" in changes:
                         session.execute(text('UPDATE watchlist SET "Group" = :val WHERE "Ticker" = :tk;'), {"val": str(changes["Group"]).strip(), "tk": clean_tk})
-                    has_changed = True
-                    
+                has_changed = True
+                
             if has_changed:
                 session.commit()
     except Exception as e:
@@ -438,7 +460,6 @@ if not raw_portfolio_df.empty:
             na_position="last"
         ).reset_index(drop=True)
         
-        # Store current layout for the callback to reference before generating the grid
         st.session_state.current_editor_df = df_results_viz
         
         response_editor = st.data_editor(
@@ -457,7 +478,7 @@ if not raw_portfolio_df.empty:
             num_rows="dynamic", 
             height=get_table_height(df_results_viz, max_height=500),
             key="unified_portfolio_editor",
-            on_change=save_grid_edits # Database update happens here automatically
+            on_change=save_grid_edits
         )
 
 else:
