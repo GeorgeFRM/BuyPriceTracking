@@ -1,6 +1,6 @@
 streamlit
 yfinance
 pandas
-psycopg2-binary
+psycopg
 sqlalchemy
 openpyxl
