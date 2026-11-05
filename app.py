@@ -225,6 +225,7 @@ if not raw_portfolio_df.empty:
             weekly_perf = ((current_price - p_1w) / p_1w) * 100 if p_1w > 0 else 0.0
             monthly_perf = ((current_price - p_1m) / p_1m) * 100 if p_1m > 0 else 0.0
             macro_perf = ((current_price - p_90d) / p_90d) * 100 if p_90d > 0 else 0.0
+            buy_diff_pct = ((current_price - buy_target) / buy_target) * 100 if buy_target > 0 else 0.0
             
             days_below = 0
             if current_price <= buy_target:
@@ -252,12 +253,12 @@ if not raw_portfolio_df.empty:
                 "90-Day Decline": macro_perf, "Last Updated": last_updated
             })
         else:
-            current_price, status, days_display, monthly_perf, macro_perf = 0.0, "Offline", None, 0.0, 0.0
+            current_price, status, days_display, monthly_perf, macro_perf, buy_diff_pct = 0.0, "Offline", None, 0.0, 0.0, 0.0
             
         processed_data.append({
             "Ticker": ticker, "Group": group_cat, "Buy Price": buy_target, "Current Market": current_price,
             "Sell Price": sell_target, "Status": status, "Days Below Buy Target": days_display, "Last Updated": last_updated,
-            "1M Return": monthly_perf, "90-Day Return": macro_perf
+            "1M Return": monthly_perf, "90-Day Return": macro_perf, "Buy Diff %": buy_diff_pct
         })
         
     df_results = pd.DataFrame(processed_data)
@@ -282,7 +283,7 @@ if not raw_portfolio_df.empty:
     with col1:
         st.metric("Total Companies Tracked", len(df_results))
     with col2:
-        st.metric("Buy Targets Triggered", buy_alerts, delta=f"{buy_alerts} Active" if buy_alerts > 0 else None, delta_color="inverse")
+        st.metric("Buy Prices Triggered", buy_alerts, delta=f"{buy_alerts} Active" if buy_alerts > 0 else None, delta_color="inverse")
     with col3:
         st.metric("Sell Prices Reached", sell_alerts, delta=f"{sell_alerts} Active" if sell_alerts > 0 else None)
         
@@ -341,7 +342,7 @@ if not raw_portfolio_df.empty:
                     column_config={
                         "Ticker": st.column_config.TextColumn(),
                         "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
-                        "Sell Price": st.column_config.NumberColumn("Sell Price", format="$%.2f"),
+                        "Sell Price": st.column_config.NumberColumn("Target Profit", format="$%.2f"),
                         "Status": st.column_config.TextColumn("Signal Context"),
                         "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
@@ -365,7 +366,7 @@ if not raw_portfolio_df.empty:
                         "Ticker": st.column_config.TextColumn(),
                         "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
                         "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
-                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Weekly Change %": st.column_config.NumberColumn(format="%.1f%%"),
                         "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
                     hide_index=True, height=get_table_height(holding_weekly_drops, max_height=250)
@@ -383,7 +384,7 @@ if not raw_portfolio_df.empty:
                         "Ticker": st.column_config.TextColumn(),
                         "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
                         "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
-                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%"),
+                        "90-Day Decline": st.column_config.NumberColumn(format="%.1f%%"),
                         "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
                     hide_index=True, height=get_table_height(holding_macro_drops, max_height=250)
@@ -411,7 +412,7 @@ if not raw_portfolio_df.empty:
                         "Ticker": st.column_config.TextColumn(),
                         "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
                         "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
-                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Weekly Change %": st.column_config.NumberColumn(format="%.1f%%"),
                         "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
                     hide_index=True, height=get_table_height(wish_weekly, max_height=200)
@@ -425,7 +426,7 @@ if not raw_portfolio_df.empty:
                         "Ticker": st.column_config.TextColumn(),
                         "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
                         "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
-                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%"),
+                        "90-Day Decline": st.column_config.NumberColumn(format="%.1f%%"),
                         "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
                     hide_index=True, height=get_table_height(wish_macro, max_height=200)
@@ -440,8 +441,8 @@ if not raw_portfolio_df.empty:
                         "Ticker": st.column_config.TextColumn(),
                         "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
                         "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
-                        "1M Return": st.column_config.NumberColumn("1M Return", format="%.2f%%"),
-                        "90-Day Return": st.column_config.NumberColumn("90-Day Return", format="%.2f%%"),
+                        "1M Return": st.column_config.NumberColumn("1M Return", format="%.1f%%"),
+                        "90-Day Return": st.column_config.NumberColumn("90-Day Return", format="%.1f%%"),
                         "Days Below Buy Target": st.column_config.NumberColumn("Streak", format="%d Days"),
                         "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
@@ -463,7 +464,7 @@ if not raw_portfolio_df.empty:
                         "Ticker": st.column_config.TextColumn(),
                         "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
                         "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
-                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Weekly Change %": st.column_config.NumberColumn(format="%.1f%%"),
                         "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
                     hide_index=True, height=get_table_height(target_weekly, max_height=200)
@@ -477,7 +478,7 @@ if not raw_portfolio_df.empty:
                         "Ticker": st.column_config.TextColumn(),
                         "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
                         "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
-                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%"),
+                        "90-Day Decline": st.column_config.NumberColumn(format="%.1f%%"),
                         "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
                     hide_index=True, height=get_table_height(target_macro, max_height=200)
@@ -500,7 +501,7 @@ if not raw_portfolio_df.empty:
         with col_sort1:
             sort_selection = st.selectbox(
                 "Sort Table By Column:",
-                options=["Streak", "Ticker", "Group", "Buy Price", "Current Market", "Sell Price", "Status", "Last Updated"],
+                options=["Streak", "Ticker", "Group", "Buy Price", "Current Market", "Buy Diff %", "Sell Price", "1M Return", "90-Day Return", "Status", "Last Updated"],
                 index=0
             )
         with col_sort2:
@@ -512,7 +513,10 @@ if not raw_portfolio_df.empty:
             "Group": "Group",
             "Buy Price": "Buy Price",
             "Current Market": "Current Market",
+            "Buy Diff %": "Buy Diff %",
             "Sell Price": "Sell Price",
+            "1M Return": "1M Return",
+            "90-Day Return": "90-Day Return",
             "Status": "Status",
             "Last Updated": "Last Updated"
         }
@@ -532,7 +536,10 @@ if not raw_portfolio_df.empty:
                 "Group": st.column_config.SelectboxColumn("Group (Edit)", options=["Target", "Holding", "Wishlist"], required=True),
                 "Buy Price": st.column_config.NumberColumn("Buy Price (Edit)", min_value=0.0, format="$%.2f"),
                 "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f"),
+                "Buy Diff %": st.column_config.NumberColumn("Buy Diff %", disabled=True, format="%.1f%%"),
                 "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f"),
+                "1M Return": st.column_config.NumberColumn("1M Return", disabled=True, format="%.1f%%"),
+                "90-Day Return": st.column_config.NumberColumn("90-Day Return", disabled=True, format="%.1f%%"),
                 "Status": st.column_config.TextColumn("System Status", disabled=True),
                 "Days Below Buy Target": st.column_config.NumberColumn("Streak", disabled=True, format="%d Days"),
                 "Last Updated": st.column_config.TextColumn("Last Updated")
