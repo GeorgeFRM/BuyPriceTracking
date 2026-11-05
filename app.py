@@ -385,8 +385,25 @@ if not raw_portfolio_df.empty:
                     },
                     hide_index=True, height=get_table_height(wish_macro, max_height=200)
                 )
-            if wish_macro.empty and wish_weekly.empty:
-                st.info("Zero anomalous downside volume shifts identified inside Wishlist assets.")
+            
+            # New Wishlist Buy Zone Table
+            wish_buy_zone = df_results[(df_results["Group"] == "Wishlist") & (df_results["Current Market"] <= df_results["Buy Price"])].copy()
+            if not wish_buy_zone.empty:
+                st.caption("Wishlist Buy Zone (Market Price <= Buy Price)")
+                st.dataframe(
+                    wish_buy_zone[["Ticker", "Buy Price", "Current Market", "Days Below Buy Target", "Last Updated"]],
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "Days Below Buy Target": st.column_config.NumberColumn("Streak", format="%d Days"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
+                    },
+                    hide_index=True, height=get_table_height(wish_buy_zone, max_height=200)
+                )
+
+            if wish_macro.empty and wish_weekly.empty and wish_buy_zone.empty:
+                st.info("Zero Wishlist assets currently meeting standalone drop or buy-zone criteria.")
 
         with col_w2:
             st.markdown("#### Target List Standouts")
