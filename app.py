@@ -357,7 +357,7 @@ if not raw_portfolio_df.empty:
         col_d1, col_d2 = st.columns(2)
 
         with col_d1:
-            st.markdown("#### Recent Significant Declines (Weekly Change <= -10%)")
+            st.markdown("#### Recent Significant Declines (Weekly Decline >= 10%)")
             holding_weekly_drops = df_top_10_drops[df_top_10_drops["Group"] == "Holding"] if not df_top_10_drops.empty else pd.DataFrame()
             if not holding_weekly_drops.empty:
                 st.dataframe(
@@ -405,7 +405,7 @@ if not raw_portfolio_df.empty:
             st.markdown("#### Wishlist Standouts")
             wish_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_wishlist["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
             if not wish_weekly.empty:
-                st.caption("Recent Significant Declines (Weekly Change <= -10%)")
+                st.caption("Recent Significant Declines (Weekly Decline >= 10%)")
                 st.dataframe(
                     wish_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
                     column_config={
@@ -457,7 +457,7 @@ if not raw_portfolio_df.empty:
             
             target_weekly = df_top_10_drops[df_top_10_drops["Ticker"].isin(df_target["Ticker"])] if not df_top_10_drops.empty else pd.DataFrame()
             if not target_weekly.empty:
-                st.caption("Recent Significant Decline (Weekly Change <= -10%)")
+                st.caption("Recent Significant Decline (Weekly Decline >= 10%)")
                 st.dataframe(
                     target_weekly[["Ticker", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
                     column_config={
