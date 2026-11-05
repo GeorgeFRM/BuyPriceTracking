@@ -284,7 +284,7 @@ if not raw_portfolio_df.empty:
     with col2:
         st.metric("Buy Targets Triggered", buy_alerts, delta=f"{buy_alerts} Active" if buy_alerts > 0 else None, delta_color="inverse")
     with col3:
-        st.metric("Profit Horizons Reached", sell_alerts, delta=f"{sell_alerts} Active" if sell_alerts > 0 else None)
+        st.metric("Sell Prices Reached", sell_alerts, delta=f"{sell_alerts} Active" if sell_alerts > 0 else None)
         
     st.write("---")
 
@@ -298,7 +298,7 @@ if not raw_portfolio_df.empty:
         col_h1, col_h2 = st.columns(2)
         
         with col_h1:
-            st.markdown("#### Attractive Buys")
+            st.markdown("#### Buy Price Triggered")
             buy_zone = df_holding[df_holding["Current Market"] <= (df_holding["Buy Price"] * 1.05)].copy()
             
             if not buy_zone.empty:
@@ -341,7 +341,7 @@ if not raw_portfolio_df.empty:
                     column_config={
                         "Ticker": st.column_config.TextColumn(),
                         "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
-                        "Sell Price": st.column_config.NumberColumn("Target Profit", format="$%.2f"),
+                        "Sell Price": st.column_config.NumberColumn("Sell Price", format="$%.2f"),
                         "Status": st.column_config.TextColumn("Signal Context"),
                         "Last Updated": st.column_config.TextColumn("Last Updated")
                     },
