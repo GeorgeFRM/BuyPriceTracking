@@ -346,6 +346,46 @@ if not raw_portfolio_df.empty:
             else:
                 st.info("No corporate holdings currently occupying the Liquidation Horizon Matrix.")
 
+        st.write("---")
+        st.subheader("Significant Market Declines Across Watchlist")
+        col_d1, col_d2 = st.columns(2)
+
+        with col_d1:
+            st.markdown("#### Recent Significant Declines (Weekly Change <= -10%)")
+            if not df_top_10_drops.empty:
+                st.dataframe(
+                    df_top_10_drops[["Ticker", "Group", "Buy Price", "Current Market", "Weekly Change %", "Last Updated"]],
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(),
+                        "Group": st.column_config.TextColumn("Group"),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "Weekly Change %": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
+                    },
+                    hide_index=True, height=get_table_height(df_top_10_drops, max_height=250)
+                )
+            else:
+                st.info("Zero assets meeting weekly drop criteria (<= -10%).")
+
+        with col_d2:
+            st.markdown("#### Sustained Weakness (90-Day Drop >= 25%)")
+            if not df_top_90d_drops.empty:
+                st.dataframe(
+                    df_top_90d_drops[["Ticker", "Group", "Buy Price", "Current Market", "90-Day Decline", "Last Updated"]],
+                    column_config={
+                        "Ticker": st.column_config.TextColumn(),
+                        "Group": st.column_config.TextColumn("Group"),
+                        "Buy Price": st.column_config.NumberColumn("Target Price", format="$%.2f"),
+                        "Current Market": st.column_config.NumberColumn("Market Price", format="$%.2f"),
+                        "90-Day Decline": st.column_config.NumberColumn(format="%.2f%%"),
+                        "Last Updated": st.column_config.TextColumn("Last Updated")
+                    },
+                    hide_index=True, height=get_table_height(df_top_90d_drops, max_height=250)
+                )
+            else:
+                st.info("Zero assets meeting 90-day decline criteria (>= 25%).")
+
     # --- TAB 2: TARGET / WISHLIST ALERTS ---
     with tab2:
         st.subheader("Significant Stock Moves")
@@ -386,7 +426,6 @@ if not raw_portfolio_df.empty:
                     hide_index=True, height=get_table_height(wish_macro, max_height=200)
                 )
             
-            # New Wishlist Buy Zone Table
             wish_buy_zone = df_results[(df_results["Group"] == "Wishlist") & (df_results["Current Market"] <= df_results["Buy Price"])].copy()
             if not wish_buy_zone.empty:
                 st.caption("Wishlist Buy Zone (Market Price <= Buy Price)")
@@ -437,66 +476,4 @@ if not raw_portfolio_df.empty:
                     hide_index=True, height=get_table_height(target_macro, max_height=200)
                 )
             if target_macro.empty and target_weekly.empty:
-                st.info("Zero anomalous downside volume shifts identified inside active Core Target assets.")
-
-    # --- TAB 3: COMPLETE WATCHLIST ---
-    with tab3:
-        st.subheader("Full Watchlist")
-        
-        df_results_viz = df_results.copy()
-        def get_clean_status(status):
-            if "Buy" in status: return "Buy Zone"
-            if "Sell" in status: return "Sell Zone"
-            return "Hold / Monitor"
-        df_results_viz["Status"] = df_results_viz["Status"].apply(get_clean_status)
-
-        col_sort1, col_sort2 = st.columns([2, 1])
-        with col_sort1:
-            sort_selection = st.selectbox(
-                "Sort Table By Column:",
-                options=["Streak", "Ticker", "Group", "Buy Price", "Current Market", "Sell Price", "Status", "Last Updated"],
-                index=0
-            )
-        with col_sort2:
-            sort_direction = st.radio("Order Direction:", options=["Descending", "Ascending"], horizontal=True, index=0)
-
-        sort_mapping = {
-            "Streak": "Days Below Buy Target",
-            "Ticker": "Ticker",
-            "Group": "Group",
-            "Buy Price": "Buy Price",
-            "Current Market": "Current Market",
-            "Sell Price": "Sell Price",
-            "Status": "Status",
-            "Last Updated": "Last Updated"
-        }
-        
-        df_results_viz = df_results_viz.sort_values(
-            by=sort_mapping[sort_selection],
-            ascending=(sort_direction == "Ascending"),
-            na_position="last"
-        ).reset_index(drop=True)
-        
-        st.session_state.current_editor_df = df_results_viz
-        
-        response_editor = st.data_editor(
-            df_results_viz,
-            column_config={
-                "Ticker": st.column_config.TextColumn("Ticker", disabled=True), 
-                "Group": st.column_config.SelectboxColumn("Group (Edit)", options=["Target", "Holding", "Wishlist"], required=True),
-                "Buy Price": st.column_config.NumberColumn("Buy Price (Edit)", min_value=0.0, format="$%.2f"),
-                "Current Market": st.column_config.NumberColumn("Current Market", disabled=True, format="$%.2f"),
-                "Sell Price": st.column_config.NumberColumn("Sell Price (Edit)", min_value=0.0, format="$%.2f"),
-                "Status": st.column_config.TextColumn("System Status", disabled=True),
-                "Days Below Buy Target": st.column_config.NumberColumn("Streak", disabled=True, format="%d Days"),
-                "Last Updated": st.column_config.TextColumn("Last Updated")
-            },
-            hide_index=True, 
-            num_rows="dynamic", 
-            height=get_table_height(df_results_viz, max_height=500),
-            key="unified_portfolio_editor",
-            on_change=save_grid_edits
-        )
-
-else:
-    st.info("App database is currently empty. Populate items through the sidebar to initialize your dashboards.")
+                st.info
