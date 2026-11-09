@@ -372,7 +372,7 @@ if not raw_portfolio_df.empty:
                     hide_index=True, height=get_table_height(holding_weekly_drops, max_height=250)
                 )
             else:
-                st.info("Zero holding assets meeting weekly drop criteria (<= -10%).")
+                st.info("Zero holding assets meeting weekly drop criteria (> 10%).")
 
         with col_d2:
             st.markdown("#### Sustained Weakness (90-Day Drop >= 25%)")
